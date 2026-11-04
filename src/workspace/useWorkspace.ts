@@ -2,11 +2,12 @@ import type { PDFDocument } from 'pdf-lib';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { downloadBlob } from '../lib/download';
 import type { ExportProgress } from '../pdf/exportPdf';
-import { prepareSourceImage, sourceThumb, UnsupportedImageError } from '../pdf/images';
+import { imageObjectUrl, prepareSourceImage, sourceThumb, UnsupportedImageError } from '../pdf/images';
 import type { Thumb } from '../pdf/thumbs';
 import { addRotation } from './geometry';
 import { initialState, reachable, reducer } from './state';
 import type { AppError, ErrorKind, PageItem, Source } from './types';
+import { useSession } from './useSession';
 
 export type { Action as WorkspaceAction } from './state';
 
@@ -26,6 +27,27 @@ async function isPdf(file: File): Promise<boolean> {
   const head = new TextDecoder('latin1').decode(await file.slice(0, 1024).arrayBuffer());
   return head.includes('%PDF-');
 }
+
+type PdfSource = Extract<Source, { kind: 'pdf' }>;
+
+/** Opens a PDF's bytes as a source. */
+export type OpenedPdf = (bytes: Uint8Array, name: string, id: string) => Promise<PdfSource>;
+
+const openPdf: OpenedPdf = async (bytes, name, id) => {
+  const { PDFDocument } = await loadPdfLib();
+  let pdf: PDFDocument;
+  try {
+    pdf = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+  } catch {
+    throw new LoadFailure('unreadable');
+  }
+  if (pdf.isEncrypted) throw new LoadFailure('encrypted');
+  const boxes = pdf.getPages().map((page) => {
+    const { width, height } = page.getCropBox();
+    return { width, height, rotation: addRotation(page.getRotation().angle, 0) };
+  });
+  return { kind: 'pdf', id, name, bytes, doc: pdf, boxes };
+};
 
 function baseName(fileName: string): string {
   return fileName.replace(/\.[^.]+$/, '') || 'document';
@@ -116,26 +138,34 @@ export function useWorkspace() {
     setErrors((current) => [...current, { id: crypto.randomUUID(), kind, fileName }]);
   }, []);
 
+  const session = useSession(doc, state.imagePageSize, state.compression, dispatch, openPdf);
+
   const loadFile = useCallback(async (file: File) => {
     const sourceId = crypto.randomUUID();
 
     if (await isPdf(file)) {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const { PDFDocument } = await loadPdfLib();
-      let pdf: PDFDocument;
+      let source = await openPdf(bytes, file.name, sourceId);
+      // exported "editable in PDForge": take off what PDForge drew, and bring it back as overlays
+      const { takeEdits } = await import('../pdf/editable');
+      let edits: Awaited<ReturnType<typeof takeEdits>>;
       try {
-        pdf = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
-      } catch {
-        throw new LoadFailure('unreadable');
+        edits = await takeEdits(source.doc, imageObjectUrl);
+      } catch (error) {
+        console.error('Could not read the PDForge edits', error);
+        edits = 'changed';
+        source = await openPdf(bytes, file.name, sourceId); // as it was, whatever got changed
       }
-      if (pdf.isEncrypted) throw new LoadFailure('encrypted');
-
-      const boxes = pdf.getPages().map((page) => {
-        const { width, height } = page.getCropBox();
-        return { width, height, rotation: addRotation(page.getRotation().angle, 0) };
-      });
-      const pages: PageItem[] = boxes.map((_, pageIndex) => ({ id: crypto.randomUUID(), sourceId, pageIndex, rotation: 0, overlays: [] }));
-      dispatch({ type: 'add', source: { kind: 'pdf', id: sourceId, name: file.name, bytes, doc: pdf, boxes }, pages });
+      if (edits === 'changed') reportError('editsChanged', file.name);
+      if (edits && edits !== 'changed') source = await openPdf(await source.doc.save(), file.name, sourceId);
+      const pages: PageItem[] = source.boxes.map((_, pageIndex) => ({
+        id: crypto.randomUUID(),
+        sourceId,
+        pageIndex,
+        rotation: edits && edits !== 'changed' ? edits.pages[pageIndex].rotation : 0,
+        overlays: edits && edits !== 'changed' ? edits.pages[pageIndex].overlays : [],
+      }));
+      dispatch({ type: 'add', source, pages });
       return;
     }
 
@@ -149,7 +179,7 @@ export function useWorkspace() {
     } catch (error) {
       throw new LoadFailure(error instanceof UnsupportedImageError ? 'unsupported' : 'unreadable');
     }
-  }, []);
+  }, [reportError]);
 
   const addFiles = useCallback(
     async (files: File[]) => {
@@ -170,11 +200,11 @@ export function useWorkspace() {
   );
 
   const download = useCallback(
-    async (pages: PageItem[], fileName: string) => {
+    async (pages: PageItem[], fileName: string, editable: boolean) => {
       setExporting(true);
       try {
         const { exportPdf } = await import('../pdf/exportPdf');
-        const pdf = await exportPdf(pages, doc.sources, state.imagePageSize, state.compression, setProgress);
+        const pdf = await exportPdf(pages, doc.sources, state.imagePageSize, state.compression, setProgress, editable);
         downloadBlob(pdf, fileName.toLowerCase().endsWith('.pdf') ? fileName : `${fileName}.pdf`);
       } catch (error) {
         console.error('Export failed', error);
@@ -205,6 +235,9 @@ export function useWorkspace() {
     progress,
     errors,
     suggestedFileName: doc.sources.length > 0 ? baseName(doc.sources[0].name) : 'document',
+    keepWork: session.keepWork,
+    setKeepWork: session.setKeepWork,
+    sessionStatus: session.sessionStatus,
     addFiles,
     download,
     reportError,

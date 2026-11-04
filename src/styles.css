@@ -356,6 +356,22 @@ select {
   color: var(--text-muted);
 }
 
+.keep-work {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.keep-work__note {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.keep-work__note--warning {
+  color: var(--danger);
+}
+
 /* ---------- Page grid ---------- */
 
 .page-grid {
@@ -541,6 +557,24 @@ select {
   color: var(--text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* shown only if reading back the kept work takes a while */
+.restoring {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 80px 16px;
+  color: var(--text-muted);
+  opacity: 0;
+  animation: appear 0.2s ease 0.4s forwards;
+}
+
+@keyframes appear {
+  to {
+    opacity: 1;
+  }
 }
 
 .spinner {

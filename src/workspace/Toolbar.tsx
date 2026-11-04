@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useI18n } from '../i18n';
+import { readSetting, writeSetting } from '../lib/storage';
 import { AddFilesButton } from '../ui/files';
 import { Icon, type IconName } from '../ui/Icon';
 import type { Compression, ImagePageSize } from './types';
@@ -20,9 +21,12 @@ function ToolButton({ icon, label, onClick, disabled, danger }: {
   );
 }
 
+const EDITABLE_SETTING = 'pdforge.editable';
+
 export function Toolbar({ ws, onPlaceSignature }: { ws: Workspace; onPlaceSignature: () => void }) {
   const { t } = useI18n();
   const [fileName, setFileName] = useState('');
+  const [editable, setEditable] = useState(() => readSetting(EDITABLE_SETTING) !== '0');
 
   const selectedPages = ws.pages.filter((page) => ws.selected.has(page.id));
   const selectedIds = selectedPages.map((page) => page.id);
@@ -41,11 +45,14 @@ export function Toolbar({ ws, onPlaceSignature }: { ws: Workspace; onPlaceSignat
           <ToolButton icon="undo" label={t.undo} disabled={!ws.canUndo} onClick={() => ws.dispatch({ type: 'undo' })} />
           <ToolButton icon="redo" label={t.redo} disabled={!ws.canRedo} onClick={() => ws.dispatch({ type: 'redo' })} />
         </div>
-        <p className="toolbar__status" aria-live="polite">
-          {t.pageCount(ws.pages.length)}
-          {hasSelection && ` · ${t.selectedCount(selectedIds.length)}`}
-          {ws.loadingCount > 0 && ` · ${t.loadingFiles(ws.loadingCount)}`}
-        </p>
+        <div className="toolbar__group">
+          <p className="toolbar__status" aria-live="polite">
+            {t.pageCount(ws.pages.length)}
+            {hasSelection && ` · ${t.selectedCount(selectedIds.length)}`}
+            {ws.loadingCount > 0 && ` · ${t.loadingFiles(ws.loadingCount)}`}
+          </p>
+          <KeepWork ws={ws} />
+        </div>
       </div>
 
       <div className="toolbar__row">
@@ -115,6 +122,17 @@ export function Toolbar({ ws, onPlaceSignature }: { ws: Workspace; onPlaceSignat
               </select>
             </label>
           )}
+          <label className="checkbox" title={t.editableHint}>
+            <input
+              type="checkbox"
+              checked={editable}
+              onChange={(event) => {
+                setEditable(event.target.checked);
+                writeSetting(EDITABLE_SETTING, event.target.checked ? '1' : '0');
+              }}
+            />
+            {t.editable}
+          </label>
           <label className="field">
             <span className="field__label">{t.fileName}</span>
             <input
@@ -130,7 +148,7 @@ export function Toolbar({ ws, onPlaceSignature }: { ws: Workspace; onPlaceSignat
               type="button"
               className="button"
               disabled={exportBlocked}
-              onClick={() => ws.download(selectedPages, outputName)}
+              onClick={() => ws.download(selectedPages, outputName, editable)}
             >
               <Icon name="download" />
               {t.downloadSelected(selectedIds.length)}
@@ -140,7 +158,7 @@ export function Toolbar({ ws, onPlaceSignature }: { ws: Workspace; onPlaceSignat
             type="button"
             className="button button--primary"
             disabled={exportBlocked}
-            onClick={() => ws.download(ws.pages, outputName)}
+            onClick={() => ws.download(ws.pages, outputName, editable)}
           >
             <Icon name="download" />
             {!ws.exporting
@@ -151,6 +169,42 @@ export function Toolbar({ ws, onPlaceSignature }: { ws: Workspace; onPlaceSignat
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The "keep after reload" switch, and whether the work is kept right now. */
+function KeepWork({ ws }: { ws: Workspace }) {
+  const { t } = useI18n();
+  const status = ws.sessionStatus;
+  const note =
+    status === 'otherTab'
+      ? t.sessionOtherTab
+      : status === 'unavailable'
+        ? t.sessionUnavailable
+        : status === 'failed'
+          ? t.sessionFailed
+          : status === 'saving' || status === 'restoring'
+            ? t.sessionSaving
+            : status === 'saved'
+              ? t.sessionSaved
+              : null;
+  return (
+    <div className="keep-work">
+      <label className="checkbox" title={t.keepWorkHint}>
+        <input
+          type="checkbox"
+          checked={ws.keepWork && status !== 'otherTab' && status !== 'unavailable'}
+          disabled={status === 'otherTab' || status === 'unavailable'}
+          onChange={(event) => ws.setKeepWork(event.target.checked)}
+        />
+        {t.keepWork}
+      </label>
+      {note && (
+        <span className={status === 'failed' || status === 'otherTab' || status === 'unavailable' ? 'keep-work__note keep-work__note--warning' : 'keep-work__note'} role="status">
+          {note}
+        </span>
+      )}
     </div>
   );
 }

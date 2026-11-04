@@ -20,6 +20,14 @@ PDF tools that run entirely in the browser, hosted on GitHub Pages. Files never 
 - Signature variants: same-named signatures are variants of one signature and take turns
   when placed on several pages, so no two look copied
 - Undo / redo (Ctrl+Z, Ctrl+Y) for page changes and edits
+- Work is kept across reloads: files and edits stay in the browser (IndexedDB, this device only)
+  until removed or the "Keep after reload" switch is turned off; one tab at a time keeps its work
+- Editable PDFs: exported files open again in PDForge with their texts, images and boxes as
+  editable items, yet are ordinary PDFs everywhere else and hardly bigger. PDForge's additions
+  sit in their own content streams, described in the catalog's `/PieceInfo` (the PDF spec's place
+  for an application's own data) with a hash of each original page, so they can be taken off
+  again; a file changed by another program since opens as a plain PDF. See
+  [src/pdf/editable.ts](src/pdf/editable.ts)
 - Compression on export (200 / 150 / 100 dpi) for added photos and for the pictures inside
   existing PDFs (scans), done in a Web Worker
 - Installable app (PWA): works offline, and once installed opens PDFs and pictures from the
@@ -50,8 +58,9 @@ npm run test:e2e      # end-to-end tests against the production build
 ```
 
 The end-to-end tests cover the editor's zoom, scrolling and dragging (also on a phone), font
-loading, signature tiles, offline fonts, and compare every font in the editor with the exported
-PDF rendered by pdf.js.
+loading, signature tiles, offline fonts, keeping work across reloads, editable PDFs (export,
+reopen, edit, export again), and compare every font in the editor with the exported PDF
+rendered by pdf.js.
 
 ### Fonts
 

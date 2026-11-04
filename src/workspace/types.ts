@@ -75,7 +75,8 @@ export type ImagePageSize = 'a4' | 'fit';
 /** How much to shrink images when exporting; 'none' keeps the original files. */
 export type Compression = 'none' | 'high' | 'medium' | 'small';
 
-export type ErrorKind = 'encrypted' | 'unsupported' | 'unreadable' | 'export';
+/** editsChanged: a PDF exported editable was changed by another program, so it opens as a plain PDF. */
+export type ErrorKind = 'encrypted' | 'unsupported' | 'unreadable' | 'export' | 'editsChanged';
 
 export interface AppError {
   id: string;

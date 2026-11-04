@@ -6,13 +6,32 @@ const require = createRequire(import.meta.url);
 const pdfjsDir = require.resolve('pdfjs-dist/build/pdf.mjs').replace(/pdf\.mjs$/, '');
 const ORIGIN = 'http://compare.test';
 
-/**
- * Renders page `pageIndex` of `pdf` with pdf.js at the size of `screenshot`, and compares the two
- * line by line: for each band of rows holding ink, the share of ink in either image with no ink
- * within 2 px in the other. 0 means identical up to anti-aliasing; a missing, swapped or shifted
- * glyph gives several percent.
- */
-export async function comparePdfWithScreenshot(context: BrowserContext, pdf: Buffer, pageIndex: number, screenshot: Buffer): Promise<number[]> {
+/** Renders page `pageIndex` of `pdf` with pdf.js, `width` pixels wide, as a PNG. */
+export async function renderPdfPage(context: BrowserContext, pdf: Buffer, pageIndex: number, width: number): Promise<Buffer> {
+  const page = await openRenderer(context);
+  try {
+    const dataUrl = await page.evaluate(
+      async ({ pdfBase64, pageIndex, width }) => {
+        const pdfjs = await import(`${location.origin}/pdf.mjs`);
+        pdfjs.GlobalWorkerOptions.workerSrc = `${location.origin}/pdf.worker.mjs`;
+        const doc = await pdfjs.getDocument({ data: Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0)) }).promise;
+        const pdfPage = await doc.getPage(pageIndex + 1);
+        const viewport = pdfPage.getViewport({ scale: width / pdfPage.getViewport({ scale: 1 }).width });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(viewport.width);
+        canvas.height = Math.round(viewport.height);
+        await pdfPage.render({ canvas, viewport }).promise;
+        return canvas.toDataURL('image/png');
+      },
+      { pdfBase64: pdf.toString('base64'), pageIndex, width },
+    );
+    return Buffer.from(dataUrl.split(',')[1], 'base64');
+  } finally {
+    await closeRenderer(context, page);
+  }
+}
+
+async function openRenderer(context: BrowserContext) {
   await context.route(`${ORIGIN}/**`, (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/') return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>compare</title>' });
@@ -20,6 +39,22 @@ export async function comparePdfWithScreenshot(context: BrowserContext, pdf: Buf
   });
   const page = await context.newPage();
   await page.goto(`${ORIGIN}/`);
+  return page;
+}
+
+async function closeRenderer(context: BrowserContext, page: Awaited<ReturnType<typeof openRenderer>>) {
+  await page.close();
+  await context.unroute(`${ORIGIN}/**`);
+}
+
+/**
+ * Renders page `pageIndex` of `pdf` with pdf.js at the size of `screenshot`, and compares the two
+ * line by line: for each band of rows holding ink, the share of ink in either image with no ink
+ * within 2 px in the other. 0 means identical up to anti-aliasing; a missing, swapped or shifted
+ * glyph gives several percent.
+ */
+export async function comparePdfWithScreenshot(context: BrowserContext, pdf: Buffer, pageIndex: number, screenshot: Buffer): Promise<number[]> {
+  const page = await openRenderer(context);
   try {
     return await page.evaluate(
       async ({ pdfBase64, pageIndex, pngBase64 }) => {
@@ -100,7 +135,6 @@ export async function comparePdfWithScreenshot(context: BrowserContext, pdf: Buf
       { pdfBase64: pdf.toString('base64'), pageIndex, pngBase64: screenshot.toString('base64') },
     );
   } finally {
-    await page.close();
-    await context.unroute(`${ORIGIN}/**`);
+    await closeRenderer(context, page);
   }
 }

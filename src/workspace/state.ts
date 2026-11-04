@@ -37,6 +37,8 @@ type DocAction =
 
 export type Action =
   | DocAction
+  /** Work kept from an earlier visit, put before anything added meanwhile; not an undo step. */
+  | { type: 'restore'; sources: Source[]; pages: PageItem[]; imagePageSize: ImagePageSize; compression: Compression }
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'thumb'; id: string; thumb: Thumb }
@@ -145,6 +147,14 @@ export function reducer(state: State, action: Action): State {
       if (!next) return state;
       return pruneSelection({ ...state, doc: next, past: [...state.past, state.doc], future: state.future.slice(1), lastChange: null });
     }
+
+    case 'restore':
+      return {
+        ...state,
+        doc: { sources: [...action.sources, ...state.doc.sources], pages: [...action.pages, ...state.doc.pages] },
+        imagePageSize: action.imagePageSize,
+        compression: action.compression,
+      };
 
     case 'thumb':
       return { ...state, thumbs: new Map(state.thumbs).set(action.id, action.thumb) };

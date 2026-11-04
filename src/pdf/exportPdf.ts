@@ -49,13 +49,14 @@ export async function exportPdf(
   imagePageSize: ImagePageSize,
   compression: Compression,
   onProgress: (progress: ExportProgress) => void,
+  editable = false,
 ): Promise<Blob> {
   const sourcesById = new Map(sources.map((source) => [source.id, source]));
   const used = [...new Set(pages.map((page) => sourcesById.get(page.sourceId)!))];
   const imageSources = used.filter((source): source is ImageSource => source.kind === 'image');
 
   try {
-    return await writePdf(pages, sources, sourcesById, imageSources, imagePageSize, compression, onProgress);
+    return await writePdf(pages, sources, sourcesById, imageSources, imagePageSize, compression, onProgress, editable);
   } finally {
     releaseCompressor();
   }
@@ -69,6 +70,7 @@ async function writePdf(
   imagePageSize: ImagePageSize,
   compression: Compression,
   onProgress: (progress: ExportProgress) => void,
+  editable: boolean,
 ): Promise<Blob> {
   const replacements =
     compression === 'none' ? new Map<ImageSource, SourceImage>() : await compressImages(imageSources, imagePageSize, compression, onProgress);
@@ -76,6 +78,7 @@ async function writePdf(
   onProgress({ stage: 'writing' });
 
   // Photos only, nothing placed on them: write the JPEGs straight through, without pdf-lib.
+  // (There is nothing to keep editable then: opened again, the pages are just the same.)
   const photosOnly = pages.every((page) => {
     const source = sourcesById.get(page.sourceId)!;
     return page.overlays.length === 0 && source.kind === 'image' && canWriteDirectly(imageFor(source));
@@ -98,6 +101,7 @@ async function writePdf(
   const bytes = await buildPdf(pages, sources, {
     imagePageSize,
     imageFor,
+    editable,
     compressEmbedded:
       compression === 'none'
         ? undefined

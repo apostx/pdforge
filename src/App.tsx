@@ -38,6 +38,8 @@ export function App() {
   const closeEditor = useCallback(() => setEditingId(null), []);
   const closeDialog = useCallback(() => setDialog(null), []);
   const empty = ws.pages.length === 0 && ws.loadingCount === 0;
+  // while the work kept from last time is read back (usually a blink), show neither the start screen nor an empty list
+  const restoring = empty && ws.sessionStatus === 'restoring';
   const { dispatch } = ws;
 
   useEffect(() => {
@@ -68,7 +70,12 @@ export function App() {
     <>
       <Header onOpenSignatures={() => setDialog('signatures')} />
       <main className="workspace">
-        {empty ? (
+        {restoring ? (
+          <p className="restoring" role="status">
+            <span className="spinner" aria-hidden="true" />
+            {t.restoring}
+          </p>
+        ) : empty ? (
           <EmptyState onFiles={ws.addFiles} />
         ) : (
           <>
