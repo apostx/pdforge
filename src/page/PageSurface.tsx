@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type HTMLAttributes, type Ref } from 'react';
-import { cssFamily, fontKey, layoutText, loadFont, type LoadedFont, type TextLayout } from '../pdf/fonts';
+import { cssFamily, fontKey, layoutText, loadFont, peekFont, type LoadedFont, type TextLayout } from '../pdf/fonts';
 import type { PageGeometry } from '../workspace/geometry';
 import type { Overlay, TextOverlay } from '../workspace/types';
 
@@ -7,9 +7,11 @@ import type { Overlay, TextOverlay } from '../workspace/types';
 export function useTextLayout(overlay: TextOverlay | null): TextLayout | null {
   const key = overlay ? fontKey(overlay) : null;
   const [loaded, setLoaded] = useState<{ key: string; font: LoadedFont } | null>(null);
+  // a font that is already loaded is used right away, so switching to it never blanks the text
+  const ready = overlay ? peekFont(overlay) : undefined;
 
   useEffect(() => {
-    if (!overlay || !key) return;
+    if (!overlay || !key || ready) return;
     let cancelled = false;
     loadFont(overlay).then(
       (font) => !cancelled && setLoaded({ key, font }),
@@ -19,9 +21,9 @@ export function useTextLayout(overlay: TextOverlay | null): TextLayout | null {
       cancelled = true;
     };
     // the key covers everything loadFont reads from the overlay
-  }, [key]);
+  }, [key, ready]);
 
-  const font = loaded?.key === key ? loaded.font.font : null;
+  const font = ready?.font ?? (loaded?.key === key ? loaded.font.font : null);
   const text = overlay?.text;
   const size = overlay?.size;
   return useMemo(
@@ -65,7 +67,7 @@ export function OverlayView({ overlay, geometry, className, style, children, ...
         <svg viewBox={`0 0 ${size.width} ${size.height}`} preserveAspectRatio="none" aria-hidden="true">
           <text
             fill={overlay.color}
-            fontFamily={cssFamily[overlay.family]}
+            fontFamily={cssFamily(overlay.family)}
             fontWeight={overlay.bold ? 700 : 400}
             fontSize={overlay.size}
             className="overlay__text"

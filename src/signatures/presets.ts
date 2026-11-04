@@ -1,4 +1,4 @@
-import { centredAnchor, displayToPage, type PageGeometry } from '../workspace/geometry';
+import { centredAnchor, displayToPage, type PageGeometry, type Vec } from '../workspace/geometry';
 import type { ImageOverlay, PageItem } from '../workspace/types';
 import type { Signature } from './SignatureProvider';
 
@@ -81,15 +81,15 @@ export function placeSignature(
   };
 }
 
-/** A signature dropped in the middle of the page (from the editor). */
-export function centredSignature(signature: Signature, geometry: PageGeometry, url: string): ImageOverlay {
+/** A signature dropped in the middle of the page, or around `centre` (a point on the page as shown), from the editor. */
+export function centredSignature(signature: Signature, geometry: PageGeometry, url: string, centre?: Vec): ImageOverlay {
   const shownWidth = quarterTurn(geometry) ? geometry.height : geometry.width;
   const shownHeight = quarterTurn(geometry) ? geometry.width : geometry.height;
   const { width, height } = signatureSize(signature, shownWidth, shownHeight, 50, 0);
   return {
     id: crypto.randomUUID(),
     kind: 'image',
-    ...centredAnchor(geometry, width, height, geometry.rotation),
+    ...centredAnchor(geometry, width, height, geometry.rotation, centre),
     rotation: geometry.rotation,
     image: signature.image,
     url,

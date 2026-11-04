@@ -71,14 +71,33 @@ export function displayToPage(geometry: PageGeometry, { x, y }: Vec): Vec {
 }
 
 /**
- * Top-left anchor (as page fractions) that centres a box of `width`×`height` points,
- * drawn with the given overlay rotation, on the page.
+ * Top-left anchor (as page fractions) that centres a box of `width`×`height` points, drawn
+ * with the given overlay rotation, on the page, or around `centre` (a point on the page as
+ * shown, in points from its top-left) moved just enough to keep the box on the page.
  */
-export function centredAnchor(geometry: PageGeometry, width: number, height: number, rotation: Rotation): Vec {
+export function centredAnchor(geometry: PageGeometry, width: number, height: number, rotation: Rotation, centre?: Vec): Vec {
   // the overlay's own axes are the page's turned counter-clockwise by `rotation`
   const halfDiagonal = rotateVec({ x: width / 2, y: height / 2 }, -rotation);
+  if (!centre) {
+    return {
+      x: 0.5 - halfDiagonal.x / geometry.width,
+      y: 0.5 - halfDiagonal.y / geometry.height,
+    };
+  }
+  // the box's size as shown on screen, to keep it inside the page as shown
+  const shown = rotateVec(halfDiagonal, geometry.rotation);
+  const halfWidth = Math.abs(shown.x);
+  const halfHeight = Math.abs(shown.y);
+  const quarterTurn = geometry.rotation % 180 !== 0;
+  const shownWidth = quarterTurn ? geometry.height : geometry.width;
+  const shownHeight = quarterTurn ? geometry.width : geometry.height;
+  const keepInside = (value: number, half: number, size: number) => (2 * half >= size ? size / 2 : Math.min(size - half, Math.max(half, value)));
+  const point = displayToPage(geometry, {
+    x: keepInside(centre.x, halfWidth, shownWidth),
+    y: keepInside(centre.y, halfHeight, shownHeight),
+  });
   return {
-    x: 0.5 - halfDiagonal.x / geometry.width,
-    y: 0.5 - halfDiagonal.y / geometry.height,
+    x: (point.x - halfDiagonal.x) / geometry.width,
+    y: (point.y - halfDiagonal.y) / geometry.height,
   };
 }
