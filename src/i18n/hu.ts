@@ -15,7 +15,8 @@ export const hu: Messages = {
   dropTitle: 'Húzd ide a PDF-eket vagy képeket',
   dropHint: 'PDF-ek összefűzése, fotókból PDF, oldalak rendezése, forgatása vagy törlése.',
   dropOverlay: 'Engedd el a fájlokat a hozzáadáshoz',
-  privacyNote: 'A fájljaid nem hagyják el az eszközödet – minden a böngészőben történik.',
+  privacyNote:
+    'A fájljaid nem hagyják el az eszközödet – minden a böngészőben történik, és frissítés után is ott maradnak, amíg ezt ki nem kapcsolod.',
   loadingFiles: (count: number) => `${count} fájl betöltése…`,
 
   pageCount: (count: number) => `${count} oldal`,
@@ -49,6 +50,20 @@ export const hu: Messages = {
     `${fileName}: a jelszóval védett vagy titkosított PDF-ek még nem támogatottak.`,
   errorUnsupported: (fileName: string) => `${fileName}: ez a fájltípus nem támogatott.`,
   errorUnreadable: (fileName: string) => `${fileName}: a fájl nem olvasható, lehet, hogy sérült.`,
+  errorEditsChanged: (name: string) =>
+    `A(z) „${name}” fájlt egy másik program módosította, miután a PDForge elmentette, ezért sima PDF-ként nyílt meg: a rá helyezett elemek már nem szerkeszthetők külön.`,
+  restoring: 'A korábbi munkád visszatöltése…',
+  keepWork: 'Megőrzés frissítés után',
+  keepWorkHint:
+    'A fájlokat és a módosításokat ebben a böngészőben, csak ezen az eszközön őrzi meg, így egy frissítés vagy a lap bezárása után sem vesznek el. Közös gépen kapcsold ki: ez a megőrzött adatokat is törli.',
+  sessionSaved: 'Megőrizve ebben a böngészőben',
+  sessionSaving: 'Mentés…',
+  sessionFailed: 'Nem sikerült megőrizni: a böngésző nem adott tárhelyet (lehet, hogy betelt)',
+  sessionOtherTab: 'Nincs megőrizve: a PDForge egy másik lapon is nyitva van, az őrzi a saját munkáját',
+  sessionUnavailable: 'Ez a böngésző itt nem tud fájlokat megőrizni (privát ablak?)',
+  editable: 'Szerkeszthető marad a PDForge-ban',
+  editableHint:
+    'Ha a PDF-et újra megnyitod a PDForge-ban, a szövegek, képek és dobozok mozgatható, módosítható elemként jönnek vissza. Minden más program normál PDF-et lát, és a fájl alig lesz nagyobb.',
   errorExport: 'Nem sikerült elkészíteni a PDF-et.',
   dismiss: 'Bezárás',
 
@@ -58,6 +73,13 @@ export const hu: Messages = {
   nextPage: 'Következő oldal',
   pageOf: (page: number, total: number) => `${page}. oldal / ${total}`,
   editorTools: 'Hozzáadás az oldalhoz',
+  zoom: 'Nagyítás',
+  zoomIn: 'Nagyítás',
+  zoomOut: 'Kicsinyítés',
+  zoomFitPage: 'Teljes oldal',
+  zoomFitWidth: 'Oldalszélesség',
+  zoomHint:
+    'Nagyítani a Ctrl + egérgörgővel, két ujjal csippentve vagy a + és − billentyűkkel lehet (a 0 a teljes oldalt mutatja). Nagyított nézetben egy üres helyen húzva mozoghatsz az oldalon; ha egy elemet a szélére húzol, a nézet követi.',
   addText: 'Szöveg',
   addImage: 'Kép',
   addCover: 'Takaró doboz',
@@ -65,8 +87,10 @@ export const hu: Messages = {
   defaultText: 'Szöveg',
   textContent: 'Szöveg',
   font: 'Betűtípus',
-  fontSans: 'Talpatlan',
-  fontSerif: 'Talpas',
+  fontCategory: { sans: 'Talpatlan', serif: 'Talpas', mono: 'Írógép (fix szélességű)', hand: 'Kézírásos' },
+  fontLike: (name: string) => `${name}-kompatibilis`,
+  fontLoading: 'Betűtípus betöltése…',
+  fontLoadFailed: 'Ezt a betűtípust nem sikerült betölteni. Ellenőrizd az internetkapcsolatot, és próbáld újra.',
   fontSize: 'Méret (pt)',
   bold: 'Félkövér',
   color: 'Szín',

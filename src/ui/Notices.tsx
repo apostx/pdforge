@@ -15,6 +15,8 @@ export function Notices({ errors, onDismiss }: { errors: AppError[]; onDismiss: 
         return t.errorUnreadable(error.fileName);
       case 'export':
         return t.errorExport;
+      case 'editsChanged':
+        return t.errorEditsChanged(error.fileName);
     }
   };
 

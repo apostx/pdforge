@@ -46,12 +46,34 @@ function listFiles(dir: string): string[] {
   });
 }
 
+/**
+ * Fonts kept for offline use from the start: the default text fonts (src/pdf/fontCatalog.ts)
+ * and the handwriting fonts typed signatures use (src/signatures/typed.ts). The rest of the
+ * catalog is several megabytes that most people never use, so each font is fetched and kept
+ * the first time a text uses it.
+ */
+const PRECACHED_FONTS = [
+  'OpenSans_400Regular',
+  'OpenSans_700Bold',
+  'SourceSerif4_400Regular',
+  'SourceSerif4_700Bold',
+  'DancingScript_400Regular',
+  'Sacramento_400Regular',
+  'Caveat_400Regular',
+];
+
 /** Writes dist/sw.js from src/service-worker.js, listing every file to keep for offline use. */
 function serviceWorker(): Plugin {
   return {
     name: 'pdforge-service-worker',
     apply: 'build',
     generateBundle(_, bundle) {
+      const fontName = (path: string) => /^assets\/(.+)-[\w-]{8}\.ttf$/.exec(path)?.[1];
+      const bundled = Object.keys(bundle);
+      const missing = PRECACHED_FONTS.filter((font) => !bundled.some((path) => fontName(path) === font));
+      // a renamed font file would otherwise quietly stop working offline
+      if (missing.length > 0) this.error(`Precached fonts not found in the bundle: ${missing.join(', ')}`);
+      const precached = bundled.filter((path) => !path.endsWith('.ttf') || PRECACHED_FONTS.includes(fontName(path) ?? ''));
       const publicDir = join(import.meta.dirname, 'public');
       // pdf.js's standard fonts and image decoders are kept so PDFs render offline too; its CMaps
       // (only needed for Chinese, Japanese and Korean text) are many, so they're cached on first use
@@ -59,7 +81,7 @@ function serviceWorker(): Plugin {
         .map((path) => relative(publicDir, path).replaceAll('\\', '/'))
         .filter((path) => !path.startsWith('pdfjs/cmaps/'));
       // index.html is added to the bundle after this hook runs, so it's listed by hand
-      const names = new Set([...Object.keys(bundle), ...publicFiles, 'index.html']);
+      const names = new Set([...precached, ...publicFiles, 'index.html']);
       const files = ['./', ...[...names].sort().map((path) => `./${path}`)];
       const hash = createHash('sha256');
       for (const file of files) hash.update(file);

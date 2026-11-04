@@ -12,6 +12,7 @@ import {
 } from 'pdf-lib';
 import type { ImagePageSize, Overlay, PageItem, Source } from '../workspace/types';
 import { compressEmbeddedImages, type EmbeddedCompression } from './compressEmbedded';
+import { startPage, writeEdits } from './editable';
 import { fontFeatures, fontKey, layoutText, loadFont, loadFontkit, type FontStyle, type LoadedFont } from './fonts';
 import type { PreparedImage, SourceImage } from './images';
 import { imagePageLayout, uprightImageMatrix } from './layout';
@@ -122,9 +123,15 @@ export interface BuildOptions {
   imageFor: (source: Extract<Source, { kind: 'image' }>) => SourceImage;
   /** Recompress the pictures inside PDF pages too. */
   compressEmbedded?: EmbeddedCompression;
+  /** Record the overlays so PDForge can open the file again with them editable (see editable.ts). */
+  editable?: boolean;
 }
 
-export async function buildPdf(pages: PageItem[], sources: Source[], { imagePageSize, imageFor, compressEmbedded }: BuildOptions): Promise<Uint8Array> {
+export async function buildPdf(
+  pages: PageItem[],
+  sources: Source[],
+  { imagePageSize, imageFor, compressEmbedded, editable = false }: BuildOptions,
+): Promise<Uint8Array> {
   const out = await PDFDocument.create();
   out.setProducer('PDForge');
   out.setCreator('PDForge');
@@ -143,6 +150,8 @@ export async function buildPdf(pages: PageItem[], sources: Source[], { imagePage
   if (compressEmbedded && copied.size > 0) await compressEmbeddedImages(out, [...copied.values()], compressEmbedded);
 
   const sourcesById = new Map(sources.map((source) => [source.id, source]));
+  const records = [];
+  const recordedImages = new Map<string, PreparedImage>();
   for (const item of pages) {
     const source = sourcesById.get(item.sourceId)!;
     let page: PDFPage;
@@ -153,7 +162,6 @@ export async function buildPdf(pages: PageItem[], sources: Source[], { imagePage
       const angle = page.getRotation().angle + item.rotation;
       page.setRotation(degrees(((angle % 360) + 360) % 360));
       box = page.getCropBox();
-      if (item.overlays.length > 0) isolateExistingContent(page);
     } else {
       // laid out by the original, so a compressed copy lands exactly where the editor showed it
       const layout = imagePageLayout(source.image.width, source.image.height, imagePageSize);
@@ -162,15 +170,24 @@ export async function buildPdf(pages: PageItem[], sources: Source[], { imagePage
       // drawn with an explicit matrix so EXIF-rotated photos go in unchanged and turned here
       const name = page.node.newXObject('Image', (await resources.image(image)).ref);
       const [a, b, c, d, e, f] = uprightImageMatrix(image.turn, layout);
-      page.pushOperators(pushGraphicsState(), concatTransformationMatrix(a, b, c, d, e, f), drawObject(name), popGraphicsState());
+      // a content stream of its own, apart from the overlays drawn later
+      const { context } = out;
+      const photo = context.contentStream([pushGraphicsState(), concatTransformationMatrix(a, b, c, d, e, f), drawObject(name), popGraphicsState()]);
+      page.node.addContentStream(context.register(photo));
       page.setRotation(degrees(item.rotation));
       box = { x: 0, y: 0, width: layout.pageWidth, height: layout.pageHeight };
     }
 
+    const record = editable ? startPage(page) : null;
+    // only PDF pages need it: a photo page's own content is balanced
+    const isolate = source.kind === 'pdf' && item.overlays.length > 0;
+    if (isolate) isolateExistingContent(page);
     for (const overlay of item.overlays) {
       await drawOverlay(page, overlay, box, resources);
     }
+    if (record) records.push(await record.finish(item, recordedImages));
   }
+  if (editable) writeEdits(out, records, recordedImages);
 
   return out.save();
 }

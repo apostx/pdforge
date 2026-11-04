@@ -356,6 +356,22 @@ select {
   color: var(--text-muted);
 }
 
+.keep-work {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.keep-work__note {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.keep-work__note--warning {
+  color: var(--danger);
+}
+
 /* ---------- Page grid ---------- */
 
 .page-grid {
@@ -543,6 +559,24 @@ select {
   white-space: nowrap;
 }
 
+/* shown only if reading back the kept work takes a while */
+.restoring {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 80px 16px;
+  color: var(--text-muted);
+  opacity: 0;
+  animation: appear 0.2s ease 0.4s forwards;
+}
+
+@keyframes appear {
+  to {
+    opacity: 1;
+  }
+}
+
 .spinner {
   width: 24px;
   height: 24px;
@@ -613,6 +647,51 @@ select {
   min-width: 0;
   overflow: hidden;
   background: var(--surface-2);
+}
+
+/* scrolls a zoomed-in page; pinches are left to the editor rather than zooming the whole app */
+.editor__scroller {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+}
+
+/* the page plus padding; at least as big as the view, so a smaller page sits in its middle.
+   Clipped, so an item hanging off the page doesn't make the scroll area (and autoscroll) grow;
+   clip rather than hidden, which focusing an item could scroll */
+.editor__stage {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+  overflow: hidden;
+  overflow: clip;
+}
+
+.editor__scroller--pannable .editor__stage {
+  cursor: grab;
+}
+
+.editor__scroller--panning .editor__stage {
+  cursor: grabbing;
+}
+
+.editor__zoom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.editor__zoom-select {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
 }
 
 .editor__canvas .page-surface {
@@ -1040,6 +1119,9 @@ select {
 
 .signature-tile {
   display: grid;
+  /* fixed tracks, so the image's max-height below has a height to work against (an auto row
+     would grow to the image instead, and tall signatures stuck out of the tile) */
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
   height: 72px;
   padding: 6px;

@@ -1,18 +1,17 @@
 import type { Font } from '@pdf-lib/fontkit';
-import sansRegularUrl from '@expo-google-fonts/open-sans/400Regular/OpenSans_400Regular.ttf?url';
-import sansBoldUrl from '@expo-google-fonts/open-sans/700Bold/OpenSans_700Bold.ttf?url';
-import serifRegularUrl from '@expo-google-fonts/source-serif-4/400Regular/SourceSerif4_400Regular.ttf?url';
-import serifBoldUrl from '@expo-google-fonts/source-serif-4/700Bold/SourceSerif4_700Bold.ttf?url';
+import { FONT_FAMILIES, type FontFamily } from './fontCatalog';
+import { fontFeatures, padSubsetGlyphs } from './fontkitFixes';
 
 // The standard PDF fonts can't encode ő/ű, so text is set in embedded fonts.
 // The same font file is used on screen (via FontFace) and in the PDF, and all
 // measuring goes through fontkit, so the editor shows exactly what gets exported.
 //
-// Fonts are subset when embedded, and pdf-lib's subsetter garbles some fonts
-// (Noto, Inter and Ubuntu among them: glyphs go missing). Open Sans and Source
-// Serif 4 come through intact; check the exported PDF visually before swapping them.
+// Fonts are subset when embedded. pdf-lib's subsetter garbles many fonts unless it is
+// patched (see padSubsetGlyphs), and fontkit can't lay out some others at all, so only
+// fonts checked with `npm run check:fonts` go in the catalog (fontCatalog.ts).
 
-export type FontFamily = 'sans' | 'serif';
+export type { FontFamily } from './fontCatalog';
+export { fontFeatures } from './fontkitFixes';
 
 export interface FontStyle {
   family: FontFamily;
@@ -21,21 +20,10 @@ export interface FontStyle {
 
 type FontKey = `${FontFamily}-${'regular' | 'bold'}`;
 
-const urls: Record<FontKey, string> = {
-  'sans-regular': sansRegularUrl,
-  'sans-bold': sansBoldUrl,
-  'serif-regular': serifRegularUrl,
-  'serif-bold': serifBoldUrl,
-};
-
-/** CSS font-family names the fonts are registered under. */
-export const cssFamily: Record<FontFamily, string> = {
-  sans: 'PDForge Sans',
-  serif: 'PDForge Serif',
-};
-
-/** Ligatures off everywhere: pdf-lib and the browser would otherwise pick them differently. */
-export const fontFeatures = { liga: false };
+/** CSS font-family name a font is registered under (family ids are plain words, so no quotes needed). */
+export function cssFamily(family: FontFamily): string {
+  return `PDForge ${family}`;
+}
 
 export interface LoadedFont {
   bytes: Uint8Array;
@@ -52,18 +40,30 @@ export function fontKey({ family, bold }: FontStyle): FontKey {
 }
 
 const cache = new Map<FontKey, Promise<LoadedFont>>();
+const loaded = new Map<FontKey, LoadedFont>();
+
+/** A font that has finished loading, or undefined. Lets a switch to it show without a blank frame. */
+export function peekFont(style: FontStyle): LoadedFont | undefined {
+  return loaded.get(fontKey(style));
+}
 
 export function loadFont(style: FontStyle): Promise<LoadedFont> {
   const key = fontKey(style);
   let loading = cache.get(key);
   if (!loading) {
     loading = (async () => {
-      const response = await fetch(urls[key]);
+      const info = FONT_FAMILIES[style.family];
+      const response = await fetch(style.bold ? info.bold : info.regular);
       if (!response.ok) throw new Error(`Could not load font ${key}`);
       const bytes = new Uint8Array(await response.arrayBuffer());
-      const face = new FontFace(cssFamily[style.family], bytes.slice(), { weight: style.bold ? '700' : '400' });
+      const face = new FontFace(cssFamily(style.family), bytes.slice(), { weight: style.bold ? '700' : '400' });
       document.fonts.add(await face.load());
-      return { bytes, font: (await loadFontkit()).create(bytes) };
+      const font = (await loadFontkit()).create(bytes);
+      // before anything is embedded: every export loads its fonts through here
+      padSubsetGlyphs(font);
+      const result = { bytes, font };
+      loaded.set(key, result);
+      return result;
     })();
     // let a failed load be retried later
     loading.catch(() => cache.delete(key));

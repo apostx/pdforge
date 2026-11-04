@@ -6,6 +6,9 @@ const PRECACHE = __PRECACHE__;
 const CACHE = `pdforge-${VERSION}`;
 // cache names start with the build time, so they sort oldest first
 const KEEP_VERSIONS = 2;
+// Files fetched on first use (most fonts, pdf.js CMaps) go here, outside the versioned caches,
+// so an update doesn't drop them: something used once keeps working offline.
+const RUNTIME_CACHE = 'pdforge-runtime';
 // Our files never vary by request headers. Ignoring Vary matters: servers may send
 // "Vary: Origin", and the page asks for its scripts with an Origin header that the
 // install-time requests didn't have, so a strict match would miss them offline.
@@ -26,7 +29,7 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) => {
-        const ours = keys.filter((key) => key.startsWith('pdforge-')).sort();
+        const ours = keys.filter((key) => key.startsWith('pdforge-') && key !== RUNTIME_CACHE).sort();
         return Promise.all(ours.slice(0, -KEEP_VERSIONS).map((key) => caches.delete(key)));
       })
       .then(() => self.clients.claim()),
@@ -54,7 +57,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // everything else has a content hash in its name (or never changes): cache first,
-  // and keep anything fetched later, such as the pdf.js font and CMap files
+  // and keep anything fetched later, such as fonts and the pdf.js CMap files
   event.respondWith(
     caches.match(request, MATCH).then(
       (cached) =>
@@ -62,7 +65,7 @@ self.addEventListener('fetch', (event) => {
         fetch(request).then((response) => {
           if (response.ok) {
             const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
           }
           return response;
         }),

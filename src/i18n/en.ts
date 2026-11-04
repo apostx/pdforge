@@ -13,7 +13,8 @@ export const en = {
   dropTitle: 'Drop PDFs or images here',
   dropHint: 'Merge PDFs, turn photos into a PDF, reorder, rotate or remove pages.',
   dropOverlay: 'Drop files to add them',
-  privacyNote: 'Your files never leave your device — everything is processed in the browser.',
+  privacyNote:
+    'Your files never leave your device — everything is processed in the browser, which also keeps them for after a reload until you turn that off.',
   loadingFiles: (count: number) => `Loading ${count} file${count === 1 ? '' : 's'}…`,
 
   pageCount: (count: number) => `${count} page${count === 1 ? '' : 's'}`,
@@ -47,6 +48,20 @@ export const en = {
     `${fileName}: password-protected or encrypted PDFs are not supported yet.`,
   errorUnsupported: (fileName: string) => `${fileName}: this file type is not supported.`,
   errorUnreadable: (fileName: string) => `${fileName}: the file could not be read, it may be damaged.`,
+  errorEditsChanged: (name: string) =>
+    `“${name}” was changed by another program after PDForge saved it, so it opened as a plain PDF: what was placed on its pages can't be edited as separate items any more.`,
+  restoring: 'Bringing back your work…',
+  keepWork: 'Keep after reload',
+  keepWorkHint:
+    'Keeps the files and changes in this browser, on this device only, so reloading or closing the tab loses nothing. Turn it off on a shared computer: that also deletes what was kept.',
+  sessionSaved: 'Kept in this browser',
+  sessionSaving: 'Saving…',
+  sessionFailed: 'Could not be kept: the browser refused the storage (it may be full)',
+  sessionOtherTab: 'Not kept: PDForge is open in another tab, which keeps its own work',
+  sessionUnavailable: 'This browser cannot keep files here (a private window?)',
+  editable: 'Editable in PDForge',
+  editableHint:
+    'Opening the PDF in PDForge again brings back its texts, images and boxes as items you can move and change. Every other program shows a normal PDF, and the file is hardly bigger.',
   errorExport: 'The PDF could not be created.',
   dismiss: 'Dismiss',
 
@@ -56,6 +71,13 @@ export const en = {
   nextPage: 'Next page',
   pageOf: (page: number, total: number) => `Page ${page} of ${total}`,
   editorTools: 'Add to page',
+  zoom: 'Zoom',
+  zoomIn: 'Zoom in',
+  zoomOut: 'Zoom out',
+  zoomFitPage: 'Whole page',
+  zoomFitWidth: 'Page width',
+  zoomHint:
+    'Zoom with Ctrl + mouse wheel, a pinch, or the + and − keys (0 shows the whole page). When zoomed in, drag an empty spot to move around; dragging an item to the edge scrolls along.',
   addText: 'Text',
   addImage: 'Image',
   addCover: 'Cover box',
@@ -63,8 +85,10 @@ export const en = {
   defaultText: 'Text',
   textContent: 'Text',
   font: 'Font',
-  fontSans: 'Sans-serif',
-  fontSerif: 'Serif',
+  fontCategory: { sans: 'Sans-serif', serif: 'Serif', mono: 'Monospaced', hand: 'Handwriting' },
+  fontLike: (name: string) => `${name}-compatible`,
+  fontLoading: 'Loading the font…',
+  fontLoadFailed: 'This font could not be loaded. Check your internet connection and try again.',
   fontSize: 'Size (pt)',
   bold: 'Bold',
   color: 'Color',
