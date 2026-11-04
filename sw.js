@@ -1,31 +1,34 @@
 // Offline support. Built into dist/sw.js by the pwa plugin in vite.config.ts, which fills in
 // the version and the list of files to keep. This file is not part of the app bundle.
 
-const VERSION = "1793316655231-299ab233e6f3";
+const VERSION = "1793836302118-5e24a4cc0866";
 const PRECACHE = [
   "./",
   "./apple-touch-icon.png",
   "./assets/Caveat_400Regular-BmQ10ZMN.ttf",
   "./assets/DancingScript_400Regular-BfvM1EuJ.ttf",
+  "./assets/DancingScript_400Regular-BtFC9R9n.js",
   "./assets/OpenSans_400Regular-BYL697sd.ttf",
   "./assets/OpenSans_700Bold-xlJa4yU9.ttf",
-  "./assets/PageEditor-pzh-5ash.js",
-  "./assets/PlaceSignatureDialog-DJ-xdUMs.js",
+  "./assets/PageEditor-DSyjYca4.js",
+  "./assets/PlaceSignatureDialog-CPG_G7Ld.js",
   "./assets/Sacramento_400Regular-j1WQUtzH.ttf",
-  "./assets/SignatureChooser-DiCW-wxA.js",
-  "./assets/SignatureManager-BFPunuVB.js",
+  "./assets/SignatureChooser-Cp-tmRJG.js",
+  "./assets/SignatureManager-DqJF58nk.js",
   "./assets/SourceSerif4_400Regular-CC0gpOMS.ttf",
   "./assets/SourceSerif4_700Bold-BrJI_OTF.ttf",
-  "./assets/buildPdf-BxZKPNwj.js",
+  "./assets/buildPdf-DsaQC8Pw.js",
   "./assets/compress.worker-BSMhJtxf.js",
+  "./assets/editable-Cc-uJQRd.js",
   "./assets/es-CqMWid5Y.js",
-  "./assets/exportPdf-Cima8mlp.js",
+  "./assets/exportPdf-DwDJeXPO.js",
+  "./assets/fontCatalog-Bvv2uJUB.js",
   "./assets/fontkit.es-nZecH4Bu.js",
-  "./assets/index-CvyWh8an.css",
-  "./assets/index-lMM-ri72.js",
+  "./assets/index-CPp7fs7h.css",
+  "./assets/index-DpPWDiz8.js",
   "./assets/pako-C_KFBokP.js",
   "./assets/pdf.worker.min-CjEcRF4W.mjs",
-  "./assets/render-CkAKeky3.js",
+  "./assets/render-Ct1Dlz5c.js",
   "./assets/rolldown-runtime-XKyaHtl9.js",
   "./favicon.svg",
   "./icon-192.png",
@@ -68,6 +71,9 @@ const PRECACHE = [
 const CACHE = `pdforge-${VERSION}`;
 // cache names start with the build time, so they sort oldest first
 const KEEP_VERSIONS = 2;
+// Files fetched on first use (most fonts, pdf.js CMaps) go here, outside the versioned caches,
+// so an update doesn't drop them: something used once keeps working offline.
+const RUNTIME_CACHE = 'pdforge-runtime';
 // Our files never vary by request headers. Ignoring Vary matters: servers may send
 // "Vary: Origin", and the page asks for its scripts with an Origin header that the
 // install-time requests didn't have, so a strict match would miss them offline.
@@ -88,7 +94,7 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) => {
-        const ours = keys.filter((key) => key.startsWith('pdforge-')).sort();
+        const ours = keys.filter((key) => key.startsWith('pdforge-') && key !== RUNTIME_CACHE).sort();
         return Promise.all(ours.slice(0, -KEEP_VERSIONS).map((key) => caches.delete(key)));
       })
       .then(() => self.clients.claim()),
@@ -116,7 +122,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // everything else has a content hash in its name (or never changes): cache first,
-  // and keep anything fetched later, such as the pdf.js font and CMap files
+  // and keep anything fetched later, such as fonts and the pdf.js CMap files
   event.respondWith(
     caches.match(request, MATCH).then(
       (cached) =>
@@ -124,7 +130,7 @@ self.addEventListener('fetch', (event) => {
         fetch(request).then((response) => {
           if (response.ok) {
             const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
           }
           return response;
         }),
