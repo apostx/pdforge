@@ -59,13 +59,40 @@ export async function renderPdfThumbs(
 // The editor keeps the document it is showing open, so stepping through pages is quick.
 let editorDocument: { bytes: Uint8Array; task: PDFDocumentLoadingTask } | null = null;
 
-/** Renders one page for the editor; the returned object URL belongs to the caller. */
-export function renderPdfPage(bytes: Uint8Array, pageIndex: number, longSide: number): Promise<string> {
+function editorTask(bytes: Uint8Array): PDFDocumentLoadingTask {
   if (editorDocument?.bytes !== bytes) {
     void editorDocument?.task.destroy();
     editorDocument = { bytes, task: openPdf(bytes) };
   }
-  return renderPage(editorDocument.task, pageIndex, longSide, 0.92);
+  return editorDocument.task;
+}
+
+/** Renders one page for the editor; the returned object URL belongs to the caller. */
+export function renderPdfPage(bytes: Uint8Array, pageIndex: number, longSide: number): Promise<string> {
+  return renderPage(editorTask(bytes), pageIndex, longSide, 0.92);
+}
+
+/** Part of a page, in points from the top-left of the unrotated page. */
+export interface PageRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Renders just `region` of a page at `scale` device pixels per point, for a sharp view of the
+ * part in sight when the page is zoomed in further than a whole-page rendering can go.
+ */
+export async function renderPdfRegion(bytes: Uint8Array, pageIndex: number, scale: number, region: PageRegion): Promise<string> {
+  const doc = await editorTask(bytes).promise;
+  const page = await doc.getPage(pageIndex + 1);
+  const viewport = page.getViewport({ scale, rotation: 0, offsetX: -region.x * scale, offsetY: -region.y * scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.ceil(region.width * scale));
+  canvas.height = Math.max(1, Math.ceil(region.height * scale));
+  await page.render({ canvas, viewport }).promise;
+  return canvasToUrl(canvas, 0.92);
 }
 
 export function closeEditorDocument(): void {

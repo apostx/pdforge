@@ -11,8 +11,11 @@ PDF tools that run entirely in the browser, hosted on GitHub Pages. Files never 
   + / − / 0 keys, or the zoom menu: whole page, page width, 25–400%) to place things exactly
 - Text in 24 fonts, all with full Hungarian support: sans-serif, serif, monospaced and
   handwriting, including stand-ins with the same letter widths as Arial, Calibri,
-  Times New Roman, Georgia and Courier New for filling in forms. The exported PDF looks exactly
+  Times New Roman, Georgia and Courier New for filling in forms. Bold, italic (where the font
+  has one), left / centred / right alignment and line spacing. The exported PDF looks exactly
   like the editor; fonts load only when first used
+- Zoomed far in, the part of the page in view is rendered at full screen resolution, so small
+  print stays sharp; on phones the editor's bar is compact and the zoom controls float over the page
 - Signatures: draw one, type it in a handwriting font, or clean up photos and scans of it
   (a sheet holding several signatures is cut into separate ones); keep them in the browser
   (optionally encrypted with a PIN: PBKDF2 + AES-GCM), back them up to a file, and place

@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject } from 'react';
 import { useI18n } from '../i18n';
 import { DEFAULT_FONT_FAMILY } from '../pdf/fontCatalog';
-import { layoutText, loadFont } from '../pdf/fonts';
+import { layoutText, LINE_HEIGHT, loadFont } from '../pdf/fonts';
 import { imageObjectUrl, prepareOverlayImage } from '../pdf/images';
 import { closeEditorDocument, renderPdfPage } from '../pdf/render';
 import { overlaySize, PageSurface, useTextLayout } from '../page/PageSurface';
@@ -12,10 +12,12 @@ import { useSignatures } from '../signatures/SignatureProvider';
 import { Dialog } from '../ui/Dialog';
 import { Icon } from '../ui/Icon';
 import { useElementSize } from '../ui/useElementSize';
-import { centredAnchor, pageGeometry, rotateVec, type PageGeometry, type Vec } from '../workspace/geometry';
+import { useMediaQuery } from '../ui/useMediaQuery';
+import { centredAnchor, displayToPage, pageGeometry, rotateVec, type PageGeometry, type Vec } from '../workspace/geometry';
 import type { Overlay, PageItem, Source, TextOverlay } from '../workspace/types';
 import type { Workspace } from '../workspace/useWorkspace';
 import { OverlayPanel } from './OverlayPanel';
+import { FULL_PAGE_PIXELS, useDetail } from './useDetail';
 
 /** Space kept around the page inside the canvas, in CSS pixels. */
 const CANVAS_PADDING = 24;
@@ -33,9 +35,17 @@ const MAX_ZOOM = 400;
 export type Zoom = { fit: 'page' | 'width' } | { scale: number };
 
 /** How a new text looks: like the last one changed, so a form can be filled in one style. */
-export type TextStyle = Pick<TextOverlay, 'family' | 'bold' | 'size' | 'color'>;
+export type TextStyle = Pick<TextOverlay, 'family' | 'bold' | 'italic' | 'size' | 'color' | 'align' | 'lineSpacing'>;
 
-const DEFAULT_TEXT_STYLE: TextStyle = { family: DEFAULT_FONT_FAMILY, bold: false, size: 14, color: '#000000' };
+const DEFAULT_TEXT_STYLE: TextStyle = {
+  family: DEFAULT_FONT_FAMILY,
+  bold: false,
+  italic: false,
+  size: 14,
+  color: '#000000',
+  align: 'left',
+  lineSpacing: LINE_HEIGHT,
+};
 
 /** Distance from the canvas edge, in CSS pixels, at which dragging an item scrolls the view. */
 const AUTOSCROLL_EDGE = 32;
@@ -74,7 +84,7 @@ function useEditorBackground(page: PageItem, source: Source, longSidePx: number,
   const [rendered, setRendered] = useState<{ url: string; bucket: number } | null>(null);
   // re-render only when the size changes noticeably; images don't need re-rendering at all.
   // 0 means the canvas hasn't been measured yet.
-  const bucket = source.kind === 'pdf' ? Math.min(4096, Math.ceil(longSidePx / 512) * 512) : Math.sign(longSidePx);
+  const bucket = source.kind === 'pdf' ? Math.min(FULL_PAGE_PIXELS, Math.ceil(longSidePx / 512) * 512) : Math.sign(longSidePx);
   const hasRendering = rendered !== null;
   const current = rendered?.bucket === bucket;
 
@@ -276,10 +286,11 @@ function EditorView({ ws, page, source, position, zoom, onZoom, textStyle, onOpe
   const stageSize = { width: shown.width * scale + 2 * CANVAS_PADDING, height: shown.height * scale + 2 * CANVAS_PADDING };
   const pannable = ready && (stageSize.width > available.width + 1 || stageSize.height > available.height + 1);
 
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
   const background = useEditorBackground(
     page,
     source,
-    ready ? Math.max(pageSize.width, pageSize.height) * Math.min(window.devicePixelRatio || 1, 2) : 0,
+    ready ? Math.max(pageSize.width, pageSize.height) * pixelRatio : 0,
     ws.thumbs.get(page.id)?.url,
   );
 
@@ -297,6 +308,34 @@ function EditorView({ ws, page, source, position, zoom, onZoom, textStyle, onOpe
     const top = rect.top + (rect.height - shown.height * s) / 2;
     return { x: (clientX - left) / s, y: (clientY - top) / s };
   };
+
+  /** The part of the page in view, grown by `margin` (a share of the view) on each side, in points of the unrotated page. */
+  const visibleRegion = (margin: number) => {
+    const element = scroller.current;
+    if (!element || !stage.current) return null;
+    const rect = element.getBoundingClientRect();
+    const from = pagePoint(rect.left, rect.top);
+    const to = pagePoint(rect.left + element.clientWidth, rect.top + element.clientHeight);
+    const extraX = (to.x - from.x) * margin;
+    const extraY = (to.y - from.y) * margin;
+    const left = clamp(from.x - extraX, 0, shown.width);
+    const top = clamp(from.y - extraY, 0, shown.height);
+    const right = clamp(to.x + extraX, 0, shown.width);
+    const bottom = clamp(to.y + extraY, 0, shown.height);
+    if (right - left < 1 || bottom - top < 1) return null;
+    const a = displayToPage(geometry, { x: left, y: top });
+    const b = displayToPage(geometry, { x: right, y: bottom });
+    return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) };
+  };
+  const detail = useDetail(
+    source,
+    page,
+    geometry,
+    scale * pixelRatio,
+    ready && Math.max(pageSize.width, pageSize.height) * pixelRatio > FULL_PAGE_PIXELS,
+    visibleRegion,
+    scroller,
+  );
 
   const anchorAt = (client: Vec): ZoomAnchor => {
     const rect = scroller.current!.getBoundingClientRect();
@@ -412,8 +451,8 @@ function EditorView({ ws, page, source, position, zoom, onZoom, textStyle, onOpe
 
   const update = (overlay: Overlay) => {
     if (overlay.kind === 'text') {
-      const { family, bold, size, color } = overlay;
-      textStyle.current = { family, bold, size, color };
+      const { family, bold, italic, size, color, align, lineSpacing } = overlay;
+      textStyle.current = { family, bold, italic, size, color, align, lineSpacing };
     }
     ws.dispatch({ type: 'updateOverlay', pageId: page.id, overlay });
   };
@@ -447,7 +486,7 @@ function EditorView({ ws, page, source, position, zoom, onZoom, textStyle, onOpe
       ({ font } = await loadFont(style));
     }
     const text = t.defaultText;
-    const layout = layoutText(font, text, style.size);
+    const layout = layoutText(font, text, style.size, style.align, style.lineSpacing);
     const anchor = centredAnchor(geometry, layout.width, layout.height, rotation, visibleCentre());
     add({ id: crypto.randomUUID(), kind: 'text', ...anchor, rotation, text, ...style });
   };
@@ -627,15 +666,65 @@ function EditorView({ ws, page, source, position, zoom, onZoom, textStyle, onOpe
   const total = ws.pages.length;
   const previous = ws.pages[position - 2];
   const next = ws.pages[position];
+  // on phones the zoom controls float over the page instead of taking a row of the bar
+  const narrow = useMediaQuery('(max-width: 760px)');
   const zoomValue = 'fit' in zoom ? zoom.fit : ZOOM_MENU.includes(percent) ? String(percent) : 'custom';
+
+  const zoomControls = (
+    <div className={narrow ? 'editor__zoom editor__zoom--floating' : 'editor__zoom'} role="group" aria-label={t.zoom}>
+      <button
+        type="button"
+        className="icon-button"
+        disabled={scale <= minScale + 1e-6}
+        onClick={() => step(-1)}
+        title={`${t.zoomOut} (−)`}
+        aria-label={t.zoomOut}
+      >
+        <Icon name="zoomOut" />
+      </button>
+      <select
+        className="editor__zoom-select"
+        aria-label={t.zoom}
+        value={zoomValue}
+        onChange={(event) => {
+          const { value } = event.target;
+          if (value === 'page' || value === 'width') setZoom({ fit: value });
+          else if (value !== 'custom') zoomToScale((Number(value) / 100) * ACTUAL_SIZE);
+        }}
+      >
+        <option value="page">{'fit' in zoom && zoom.fit === 'page' ? `${t.zoomFitPage} (${percent}%)` : t.zoomFitPage}</option>
+        <option value="width">{'fit' in zoom && zoom.fit === 'width' ? `${t.zoomFitWidth} (${percent}%)` : t.zoomFitWidth}</option>
+        {zoomValue === 'custom' && (
+          <option value="custom" disabled>
+            {percent}%
+          </option>
+        )}
+        {ZOOM_MENU.map((level) => (
+          <option key={level} value={level}>
+            {level}%
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className="icon-button"
+        disabled={scale >= maxScale - 1e-6}
+        onClick={() => step(1)}
+        title={`${t.zoomIn} (+)`}
+        aria-label={t.zoomIn}
+      >
+        <Icon name="zoomIn" />
+      </button>
+    </div>
+  );
 
   return (
     <section className="editor" aria-label={t.editPage}>
       <div className="editor__bar">
         <div className="editor__start">
-          <button ref={backButton} type="button" className="button button--quiet" onClick={onClose}>
+          <button ref={backButton} type="button" className="button button--quiet" onClick={onClose} title={t.backToPages}>
             <Icon name="arrowLeft" />
-            {t.backToPages}
+            <span className="button__label">{t.backToPages}</span>
           </button>
           <div className="editor__history" role="group">
             <button
@@ -685,60 +774,16 @@ function EditorView({ ws, page, source, position, zoom, onZoom, textStyle, onOpe
           </button>
         </div>
 
-        <div className="editor__zoom" role="group" aria-label={t.zoom}>
-          <button
-            type="button"
-            className="icon-button"
-            disabled={scale <= minScale + 1e-6}
-            onClick={() => step(-1)}
-            title={`${t.zoomOut} (−)`}
-            aria-label={t.zoomOut}
-          >
-            <Icon name="zoomOut" />
-          </button>
-          <select
-            className="editor__zoom-select"
-            aria-label={t.zoom}
-            value={zoomValue}
-            onChange={(event) => {
-              const { value } = event.target;
-              if (value === 'page' || value === 'width') setZoom({ fit: value });
-              else if (value !== 'custom') zoomToScale((Number(value) / 100) * ACTUAL_SIZE);
-            }}
-          >
-            <option value="page">{'fit' in zoom && zoom.fit === 'page' ? `${t.zoomFitPage} (${percent}%)` : t.zoomFitPage}</option>
-            <option value="width">{'fit' in zoom && zoom.fit === 'width' ? `${t.zoomFitWidth} (${percent}%)` : t.zoomFitWidth}</option>
-            {zoomValue === 'custom' && (
-              <option value="custom" disabled>
-                {percent}%
-              </option>
-            )}
-            {ZOOM_MENU.map((level) => (
-              <option key={level} value={level}>
-                {level}%
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="icon-button"
-            disabled={scale >= maxScale - 1e-6}
-            onClick={() => step(1)}
-            title={`${t.zoomIn} (+)`}
-            aria-label={t.zoomIn}
-          >
-            <Icon name="zoomIn" />
-          </button>
-        </div>
+        {!narrow && zoomControls}
 
         <div className="editor__tools" role="group" aria-label={t.editorTools}>
-          <button type="button" className="button" onClick={addText}>
+          <button type="button" className="button" onClick={addText} title={t.addText}>
             <Icon name="text" />
-            {t.addText}
+            <span className="button__label">{t.addText}</span>
           </button>
-          <button type="button" className="button" onClick={() => imageInput.current?.click()}>
+          <button type="button" className="button" onClick={() => imageInput.current?.click()} title={t.addImage}>
             <Icon name="image" />
-            {t.addImage}
+            <span className="button__label">{t.addImage}</span>
           </button>
           <input
             ref={imageInput}
@@ -753,17 +798,18 @@ function EditorView({ ws, page, source, position, zoom, onZoom, textStyle, onOpe
           />
           <button type="button" className="button" onClick={addCover} title={t.addCoverHint}>
             <Icon name="box" />
-            {t.addCover}
+            <span className="button__label">{t.addCover}</span>
           </button>
-          <button type="button" className="button" onClick={() => setChoosingSignature(true)}>
+          <button type="button" className="button" onClick={() => setChoosingSignature(true)} title={t.addSignature}>
             <Icon name="signature" />
-            {t.addSignature}
+            <span className="button__label">{t.addSignature}</span>
           </button>
         </div>
       </div>
 
       <div className="editor__body">
         <div ref={canvas} className="editor__canvas">
+          {narrow && zoomControls}
           <div
             ref={scroller}
             className={['editor__scroller', pannable && 'editor__scroller--pannable', panning && 'editor__scroller--panning'].filter(Boolean).join(' ')}
@@ -782,6 +828,7 @@ function EditorView({ ws, page, source, position, zoom, onZoom, textStyle, onOpe
                 <PageSurface
                   geometry={geometry}
                   backgroundUrl={background}
+                  detail={detail}
                   overlays={page.overlays}
                   size={pageSize}
                   overlayProps={(overlay) => ({

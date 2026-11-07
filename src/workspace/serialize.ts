@@ -1,4 +1,5 @@
 import { FONT_FAMILIES, DEFAULT_FONT_FAMILY, type FontFamily } from '../pdf/fontCatalog';
+import { LINE_HEIGHT, type TextAlign } from '../pdf/fonts';
 import type { PreparedImage } from '../pdf/images';
 import type { ImageOverlay, Overlay, Rotation } from './types';
 
@@ -46,6 +47,7 @@ export function restoredImage(key: string, info: StoredImageInfo, bytes: Uint8Ar
 }
 
 const ROTATIONS: Rotation[] = [0, 90, 180, 270];
+const ALIGNS: TextAlign[] = ['left', 'center', 'right'];
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 const isRotation = (value: unknown): value is Rotation => ROTATIONS.includes(value as Rotation);
 const isColor = (value: unknown): value is string => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
@@ -79,7 +81,19 @@ export function restoreOverlay(
     case 'text': {
       if (typeof stored.text !== 'string' || !isNumber(stored.size) || !isColor(stored.color)) return null;
       const family: FontFamily = typeof stored.family === 'string' && stored.family in FONT_FAMILIES ? (stored.family as FontFamily) : DEFAULT_FONT_FAMILY;
-      return { ...base, kind: 'text', text: stored.text.slice(0, 100_000), family, bold: stored.bold === true, size: clamp(stored.size, 4, 300), color: stored.color };
+      // italic, align and lineSpacing came later; texts kept or exported before them get the defaults
+      return {
+        ...base,
+        kind: 'text',
+        text: stored.text.slice(0, 100_000),
+        family,
+        bold: stored.bold === true,
+        italic: stored.italic === true,
+        size: clamp(stored.size, 4, 300),
+        color: stored.color,
+        align: ALIGNS.includes(stored.align as TextAlign) ? (stored.align as TextAlign) : 'left',
+        lineSpacing: isNumber(stored.lineSpacing) ? clamp(stored.lineSpacing, 0.8, 3) : LINE_HEIGHT,
+      };
     }
     case 'rect': {
       const width = size(stored.width);

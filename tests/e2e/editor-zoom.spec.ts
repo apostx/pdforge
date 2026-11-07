@@ -165,3 +165,38 @@ test.describe('on a phone', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
   });
 });
+
+test.describe('on a sharp screen', () => {
+  test.use({ deviceScaleFactor: 2 });
+
+  test('far zoomed in, the part in view is rendered at full resolution', async ({ page }) => {
+    await openEditor(page, await samplePdf());
+    const ed = editor(page);
+    const detail = page.locator('.page-surface__detail');
+    await expect(detail).toHaveCount(0);
+    await ed.zoomSelect.selectOption('300');
+    await expect(detail).toHaveCount(1);
+    const sizes = await detail.evaluate((img: HTMLImageElement) => {
+      const shown = img.getBoundingClientRect();
+      const view = document.querySelector('.editor__scroller')!.getBoundingClientRect();
+      const page = document.querySelector('.editor .page-surface')!.getBoundingClientRect();
+      return {
+        ratio: Math.max(img.naturalWidth, img.naturalHeight) / Math.max(shown.width, shown.height),
+        covers:
+          shown.left <= Math.max(view.left, page.left) + 1 &&
+          shown.top <= Math.max(view.top, page.top) + 1 &&
+          shown.right >= Math.min(view.right, page.right) - 1 &&
+          shown.bottom >= Math.min(view.bottom, page.bottom) - 1,
+      };
+    });
+    expect(sizes.ratio).toBeGreaterThan(1.9);
+    expect(sizes.covers).toBe(true);
+    // scrolled: the new view is rendered
+    const first = await detail.getAttribute('src');
+    await ed.scroller.evaluate((element) => element.scrollBy(300, 500));
+    await expect.poll(() => detail.getAttribute('src')).not.toBe(first);
+    // zoomed out: the whole-page rendering is sharp enough again
+    await ed.zoomSelect.selectOption('page');
+    await expect(detail).toHaveCount(0);
+  });
+});

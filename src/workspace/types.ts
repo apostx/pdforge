@@ -1,5 +1,5 @@
 import type { PDFDocument } from 'pdf-lib';
-import type { FontFamily } from '../pdf/fonts';
+import type { FontFamily, TextAlign } from '../pdf/fonts';
 import type { PreparedImage, SourceImage } from '../pdf/images';
 
 export type Rotation = 0 | 90 | 180 | 270;
@@ -35,9 +35,14 @@ export interface TextOverlay extends OverlayBase {
   text: string;
   family: FontFamily;
   bold: boolean;
+  italic: boolean;
   /** Font size in points. */
   size: number;
   color: string;
+  /** How the lines of a multi-line text line up with each other. */
+  align: TextAlign;
+  /** Distance between baselines, as a multiple of the size. */
+  lineSpacing: number;
 }
 
 export interface ImageOverlay extends OverlayBase {

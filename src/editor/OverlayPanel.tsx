@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { FONT_CATEGORIES, FONT_FAMILIES, type FontFamily } from '../pdf/fontCatalog';
-import { loadFont, peekFont, type FontStyle } from '../pdf/fonts';
-import { Icon } from '../ui/Icon';
+import { hasItalic, LINE_HEIGHT, loadFont, peekFont, type FontStyle, type TextAlign } from '../pdf/fonts';
+import { Icon, type IconName } from '../ui/Icon';
 import type { Overlay, TextOverlay } from '../workspace/types';
 
 const familyIds = Object.keys(FONT_FAMILIES) as FontFamily[];
+const LINE_SPACINGS = [1, 1.15, LINE_HEIGHT, 1.5, 2];
+const ALIGNMENTS: { value: TextAlign; icon: IconName }[] = [
+  { value: 'left', icon: 'alignLeft' },
+  { value: 'center', icon: 'alignCenter' },
+  { value: 'right', icon: 'alignRight' },
+];
 
 interface OverlayPanelProps {
   overlay: Overlay;
@@ -65,7 +71,7 @@ function useFontSwitch(overlay: Overlay, onChange: (overlay: Overlay) => void) {
 }
 
 export function OverlayPanel({ overlay, focusText, onChange, onDelete }: OverlayPanelProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const textField = useRef<HTMLTextAreaElement>(null);
   const fontSwitch = useFontSwitch(overlay, onChange);
 
@@ -83,6 +89,10 @@ export function OverlayPanel({ overlay, focusText, onChange, onDelete }: Overlay
 
   const textControls = (text: TextOverlay) => {
     const shown = fontSwitch.pending ?? text;
+    const italicAvailable = hasItalic(shown.family);
+    const style = (change: Partial<FontStyle>) =>
+      fontSwitch.apply({ family: shown.family, bold: shown.bold, italic: shown.italic, ...change });
+    const alignLabels: Record<TextAlign, string> = { left: t.alignLeft, center: t.alignCenter, right: t.alignRight };
     return (
       <>
         <label className="field field--block">
@@ -91,10 +101,7 @@ export function OverlayPanel({ overlay, focusText, onChange, onDelete }: Overlay
         </label>
         <label className="field field--block">
           <span className="field__label">{t.font}</span>
-          <select
-            value={shown.family}
-            onChange={(event) => fontSwitch.apply({ family: event.target.value as FontFamily, bold: shown.bold })}
-          >
+          <select className="font-select" value={shown.family} onChange={(event) => style({ family: event.target.value as FontFamily })}>
             {FONT_CATEGORIES.map((category) => (
               <optgroup key={category} label={t.fontCategory[category]}>
                 {familyIds
@@ -128,14 +135,48 @@ export function OverlayPanel({ overlay, focusText, onChange, onDelete }: Overlay
               }}
             />
           </label>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={shown.bold}
-              onChange={(event) => fontSwitch.apply({ family: shown.family, bold: event.target.checked })}
-            />
-            {t.bold}
+          <label className="field">
+            <span className="field__label">{t.lineSpacing}</span>
+            <select value={text.lineSpacing} onChange={(event) => onChange({ ...text, lineSpacing: Number(event.target.value) })}>
+              {(LINE_SPACINGS.includes(text.lineSpacing) ? LINE_SPACINGS : [...LINE_SPACINGS, text.lineSpacing].sort((a, b) => a - b)).map((value) => (
+                <option key={value} value={value}>
+                  {value.toLocaleString(lang)}
+                </option>
+              ))}
+            </select>
           </label>
+        </div>
+        <div className="overlay-panel__row">
+          <div className="segmented" role="group" aria-label={t.textStyle}>
+            <button type="button" className="style-toggle style-toggle--bold" aria-pressed={shown.bold} title={t.bold} aria-label={t.bold} onClick={() => style({ bold: !shown.bold })}>
+              B
+            </button>
+            <button
+              type="button"
+              className="style-toggle style-toggle--italic"
+              aria-pressed={shown.italic && italicAvailable}
+              disabled={!italicAvailable}
+              title={italicAvailable ? t.italic : t.noItalic}
+              aria-label={t.italic}
+              onClick={() => style({ italic: !shown.italic })}
+            >
+              I
+            </button>
+          </div>
+          <div className="segmented" role="group" aria-label={t.align}>
+            {ALIGNMENTS.map(({ value, icon }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={text.align === value}
+                title={alignLabels[value]}
+                aria-label={alignLabels[value]}
+                onClick={() => onChange({ ...text, align: value })}
+              >
+                <Icon name={icon} size={16} />
+              </button>
+            ))}
+          </div>
           <label className="field field--inline">
             <span className="field__label">{t.color}</span>
             <input type="color" value={text.color} onChange={(event) => onChange({ ...text, color: event.target.value })} />

@@ -91,11 +91,11 @@ async function drawOverlay(page: PDFPage, overlay: Overlay, box: Box, resources:
   switch (overlay.kind) {
     case 'text': {
       const { loaded, embedded } = await resources.font(overlay);
-      const layout = layoutText(loaded.font, overlay.text, overlay.size);
+      const layout = layoutText(loaded.font, overlay.text, overlay.size, overlay.align, overlay.lineSpacing);
       const color = hexToRgb(overlay.color);
       layout.lines.forEach((line, index) => {
         if (!line) return;
-        const baseline = at(0, layout.ascent + index * layout.lineHeight);
+        const baseline = at(layout.lineOffsets[index], layout.ascent + index * layout.lineHeight);
         page.drawText(line, { ...baseline, size: overlay.size, font: embedded, color, rotate });
       });
       break;

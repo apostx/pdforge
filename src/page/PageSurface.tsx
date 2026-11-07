@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type HTMLAttributes, type Ref } from 'react';
-import { cssFamily, fontKey, layoutText, loadFont, peekFont, type LoadedFont, type TextLayout } from '../pdf/fonts';
+import { cssFamily, fontKey, hasItalic, layoutText, loadFont, peekFont, type LoadedFont, type TextLayout } from '../pdf/fonts';
 import type { PageGeometry } from '../workspace/geometry';
 import type { Overlay, TextOverlay } from '../workspace/types';
 
@@ -26,9 +26,11 @@ export function useTextLayout(overlay: TextOverlay | null): TextLayout | null {
   const font = ready?.font ?? (loaded?.key === key ? loaded.font.font : null);
   const text = overlay?.text;
   const size = overlay?.size;
+  const align = overlay?.align;
+  const lineSpacing = overlay?.lineSpacing;
   return useMemo(
-    () => (font && text !== undefined && size !== undefined ? layoutText(font, text, size) : null),
-    [font, text, size],
+    () => (font && text !== undefined && size !== undefined ? layoutText(font, text, size, align, lineSpacing) : null),
+    [font, text, size, align, lineSpacing],
   );
 }
 
@@ -69,11 +71,12 @@ export function OverlayView({ overlay, geometry, className, style, children, ...
             fill={overlay.color}
             fontFamily={cssFamily(overlay.family)}
             fontWeight={overlay.bold ? 700 : 400}
+            fontStyle={overlay.italic && hasItalic(overlay.family) ? 'italic' : 'normal'}
             fontSize={overlay.size}
             className="overlay__text"
           >
             {layout.lines.map((line, index) => (
-              <tspan key={index} x={0} y={layout.ascent + index * layout.lineHeight}>
+              <tspan key={index} x={layout.lineOffsets[index]} y={layout.ascent + index * layout.lineHeight}>
                 {line}
               </tspan>
             ))}
@@ -89,6 +92,8 @@ interface PageSurfaceProps {
   geometry: PageGeometry;
   /** The rendered PDF page, or for image pages the image itself. */
   backgroundUrl?: string;
+  /** A sharper rendering of part of the page, laid over the background (editor, zoomed in). */
+  detail?: { url: string; x: number; y: number; width: number; height: number } | null;
   overlays: Overlay[];
   /** Pixel size of the unrotated page. Without it the page is fitted into its (square) parent. */
   size?: { width: number; height: number };
@@ -97,7 +102,7 @@ interface PageSurfaceProps {
 }
 
 /** A page as it will come out: background plus overlays, rotated for display. */
-export function PageSurface({ geometry, backgroundUrl, overlays, size, className, overlayProps }: PageSurfaceProps) {
+export function PageSurface({ geometry, backgroundUrl, detail, overlays, size, className, overlayProps }: PageSurfaceProps) {
   const { width, height, rotation, imageRect } = geometry;
   const box: CSSProperties = size
     ? { width: size.width, height: size.height }
@@ -124,6 +129,15 @@ export function PageSurface({ geometry, backgroundUrl, overlays, size, className
               height: `${imageRect.height * 100}%`,
             }
           }
+        />
+      )}
+      {detail && (
+        <img
+          className="page-surface__detail"
+          src={detail.url}
+          alt=""
+          draggable={false}
+          style={{ left: `${detail.x * 100}%`, top: `${detail.y * 100}%`, width: `${detail.width * 100}%`, height: `${detail.height * 100}%` }}
         />
       )}
       {overlays.map((overlay) => (

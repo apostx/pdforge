@@ -21,7 +21,7 @@ test('fonts offline: the defaults always, others once they have been used', asyn
   const ed = editor(page);
   await ed.addText();
   await expect(ed.selectedText).toHaveAttribute('font-family', 'PDForge openSans');
-  const fontSelect = page.locator('.overlay-panel select');
+  const fontSelect = page.locator('.overlay-panel .font-select');
   await fontSelect.selectOption('roboto');
   await expect(page.locator('.overlay-panel .form-error')).toBeVisible();
 
