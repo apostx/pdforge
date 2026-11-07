@@ -1,1 +1,0 @@
-var e=new URL(`Caveat_400Regular-BmQ10ZMN.ttf`,import.meta.url).href,t=new URL(`DancingScript_400Regular-BfvM1EuJ.ttf`,import.meta.url).href;export{e as n,t};
