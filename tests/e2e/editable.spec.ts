@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { PDFDocument, rgb } from 'pdf-lib';
 import { comparePdfWithScreenshot, renderPdfPage } from './compare';
 import { photoJpg, stampPng } from './fixtures';
-import { editor, samplePdf, watchErrors } from './helpers';
+import { editor, samplePdf, setToggle, watchErrors } from './helpers';
 
 test.use({ viewport: { width: 1280, height: 800 }, acceptDownloads: true });
 
@@ -43,10 +43,14 @@ test('an editable PDF opens again with its items editable, and looks like a plai
   await editPage(page, 0);
   await ed.addText();
   await page.locator('.overlay-panel textarea').fill('Árvíztűrő\nmásodik sor');
-  await page.locator('.overlay-panel select').selectOption('tinos');
+  await page.locator('.overlay-panel .font-select').selectOption('tinos');
   await expect(ed.selectedText).toHaveAttribute('font-family', 'PDForge tinos');
-  await page.locator('.overlay-panel input[type=checkbox]').check();
+  await setToggle(page, 'Bold');
   await expect(ed.selectedText).toHaveAttribute('font-weight', '700');
+  await setToggle(page, 'Italic');
+  await expect(ed.selectedText).toHaveAttribute('font-style', 'italic');
+  await setToggle(page, 'Centre');
+  await page.getByLabel('Line spacing').selectOption('1.5');
   await page.locator('.editor__tools').getByRole('button', { name: 'Cover box' }).click();
   for (let i = 0; i < 5; i++) await page.keyboard.press('Shift+ArrowDown');
   await page.locator('.editor__tools input[type=file]').setInputFiles({ name: 'stamp.png', mimeType: 'image/png', buffer: stampPng });
@@ -87,7 +91,12 @@ test('an editable PDF opens again with its items editable, and looks like a plai
   const text = reopened.locator('.editor .overlay svg text');
   await expect(text).toHaveAttribute('font-family', 'PDForge tinos');
   await expect(text).toHaveAttribute('font-weight', '700');
+  await expect(text).toHaveAttribute('font-style', 'italic');
   await expect(text).toHaveText('Árvíztűrőmásodik sor');
+  // centred lines and 1.5 line spacing came back too
+  const lines = await text.locator('tspan').evaluateAll((spans) => spans.map((span) => [Number(span.getAttribute('x')), Number(span.getAttribute('y'))]));
+  expect(lines[0][0]).toBeGreaterThan(1);
+  expect(lines[1][1] - lines[0][1]).toBeCloseTo(14 * 1.5, 1);
   await reopened.locator('.editor .overlay').first().click({ position: { x: 3, y: 3 } });
   await reopened.locator('.overlay-panel textarea').fill('Árvíztűrő\nmásodik sor (javítva)');
   await reopened.getByRole('button', { name: 'Back to pages' }).click();

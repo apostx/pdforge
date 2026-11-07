@@ -449,6 +449,12 @@ select {
   -webkit-user-drag: none;
 }
 
+.page-surface__detail {
+  position: absolute;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
 .overlay {
   position: absolute;
   transform-origin: 0 0;
@@ -681,6 +687,19 @@ select {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* phones: over the bottom right of the page area, instead of a row of the bar */
+.editor__zoom--floating {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .editor__zoom-select {
@@ -946,6 +965,28 @@ select {
 .segmented button[aria-pressed='true'] {
   background: var(--surface);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.15);
+}
+
+.segmented button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* B and I, shown in the style they switch on */
+.segmented .style-toggle {
+  min-width: 34px;
+  justify-content: center;
+  padding: 0 8px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+}
+
+.style-toggle--bold {
+  font-weight: 700;
+}
+
+.style-toggle--italic {
+  font-style: italic;
 }
 
 /* ---------- Signatures ---------- */

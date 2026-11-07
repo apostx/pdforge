@@ -16,9 +16,16 @@ export { fontFeatures } from './fontkitFixes';
 export interface FontStyle {
   family: FontFamily;
   bold: boolean;
+  /** Ignored for a family without italics (see hasItalic). */
+  italic: boolean;
 }
 
-type FontKey = `${FontFamily}-${'regular' | 'bold'}`;
+type FontKey = `${FontFamily}-${'regular' | 'bold' | 'italic' | 'boldItalic'}`;
+
+/** Whether a family has real italics. Others aren't slanted: the browser's fake slant wouldn't match the PDF. */
+export function hasItalic(family: FontFamily): boolean {
+  return FONT_FAMILIES[family].italic !== undefined;
+}
 
 /** CSS font-family name a font is registered under (family ids are plain words, so no quotes needed). */
 export function cssFamily(family: FontFamily): string {
@@ -35,8 +42,15 @@ export async function loadFontkit() {
   return (await import('@pdf-lib/fontkit')).default;
 }
 
-export function fontKey({ family, bold }: FontStyle): FontKey {
-  return `${family}-${bold ? 'bold' : 'regular'}`;
+export function fontKey({ family, bold, italic }: FontStyle): FontKey {
+  const slanted = italic && hasItalic(family);
+  return `${family}-${slanted ? (bold ? 'boldItalic' : 'italic') : bold ? 'bold' : 'regular'}`;
+}
+
+function fontUrl(style: FontStyle): string {
+  const info = FONT_FAMILIES[style.family];
+  if (style.italic && info.italic && info.boldItalic) return style.bold ? info.boldItalic : info.italic;
+  return style.bold ? info.bold : info.regular;
 }
 
 const cache = new Map<FontKey, Promise<LoadedFont>>();
@@ -52,11 +66,13 @@ export function loadFont(style: FontStyle): Promise<LoadedFont> {
   let loading = cache.get(key);
   if (!loading) {
     loading = (async () => {
-      const info = FONT_FAMILIES[style.family];
-      const response = await fetch(style.bold ? info.bold : info.regular);
+      const response = await fetch(fontUrl(style));
       if (!response.ok) throw new Error(`Could not load font ${key}`);
       const bytes = new Uint8Array(await response.arrayBuffer());
-      const face = new FontFace(cssFamily(style.family), bytes.slice(), { weight: style.bold ? '700' : '400' });
+      const face = new FontFace(cssFamily(style.family), bytes.slice(), {
+        weight: style.bold ? '700' : '400',
+        style: style.italic && hasItalic(style.family) ? 'italic' : 'normal',
+      });
       document.fonts.add(await face.load());
       const font = (await loadFontkit()).create(bytes);
       // before anything is embedded: every export loads its fonts through here
@@ -72,10 +88,15 @@ export function loadFont(style: FontStyle): Promise<LoadedFont> {
   return loading;
 }
 
+/** Default distance between baselines, as a multiple of the font size. */
 export const LINE_HEIGHT = 1.25;
+
+export type TextAlign = 'left' | 'center' | 'right';
 
 export interface TextLayout {
   lines: string[];
+  /** Where each line starts, from the left of the box, in points (set by the alignment). */
+  lineOffsets: number[];
   /** Box size in points. */
   width: number;
   height: number;
@@ -85,7 +106,7 @@ export interface TextLayout {
   lineHeight: number;
 }
 
-export function layoutText(font: Font, text: string, size: number): TextLayout {
+export function layoutText(font: Font, text: string, size: number, align: TextAlign = 'left', lineSpacing = LINE_HEIGHT): TextLayout {
   const scale = size / font.unitsPerEm;
   const lines = text.split('\n');
   const widths = lines.map((line) =>
@@ -93,10 +114,13 @@ export function layoutText(font: Font, text: string, size: number): TextLayout {
   );
   const ascent = font.ascent * scale;
   const descent = Math.abs(font.descent) * scale;
-  const lineHeight = size * LINE_HEIGHT;
+  const lineHeight = size * lineSpacing;
+  const width = Math.max(...widths, size * 0.5);
+  const share = align === 'center' ? 0.5 : align === 'right' ? 1 : 0;
   return {
     lines,
-    width: Math.max(...widths, size * 0.5),
+    lineOffsets: widths.map((lineWidth) => (width - lineWidth) * share),
+    width,
     height: ascent + descent + (lines.length - 1) * lineHeight,
     ascent,
     lineHeight,

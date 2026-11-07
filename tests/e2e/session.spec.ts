@@ -24,7 +24,7 @@ test('files and changes survive a reload, until turned off', async ({ page, cont
   const ed = editor(page);
   await ed.addText();
   await page.locator('.overlay-panel textarea').fill('kept text');
-  await page.locator('.overlay-panel select').selectOption('lora');
+  await page.locator('.overlay-panel .font-select').selectOption('lora');
   await expect(ed.selectedText).toHaveAttribute('font-family', 'PDForge lora');
   await page.locator('.editor__tools input[type=file]').setInputFiles({ name: 'stamp.png', mimeType: 'image/png', buffer: stampPng });
   await expect(page.locator('.editor .overlay--selected img')).toBeVisible();

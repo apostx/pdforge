@@ -64,3 +64,10 @@ export function watchErrors(page: Page): () => void {
   page.on('console', (message) => message.type() === 'error' && errors.push(message.text()));
   return () => expect(errors).toEqual([]);
 }
+
+/** Sets a toggle button in the item panel (Bold, Italic, an alignment) to pressed or not. */
+export async function setToggle(page: Page, name: string, pressed = true): Promise<void> {
+  const button = page.locator('.overlay-panel').getByRole('button', { name, exact: true });
+  if ((await button.getAttribute('aria-pressed')) !== String(pressed)) await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', String(pressed));
+}
