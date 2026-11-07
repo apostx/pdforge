@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useI18n } from '../i18n';
 import { readSetting, writeSetting } from '../lib/storage';
+import { OpenFromDriveButton, SaveToDriveButton } from '../drive/DriveControls';
 import { AddFilesButton } from '../ui/files';
 import { Icon, type IconName } from '../ui/Icon';
 import type { Compression, ImagePageSize } from './types';
@@ -41,6 +42,7 @@ export function Toolbar({ ws, onPlaceSignature }: { ws: Workspace; onPlaceSignat
       <div className="toolbar__row">
         <div className="toolbar__group">
           <AddFilesButton onFiles={ws.addFiles} />
+          <OpenFromDriveButton ws={ws} />
           <ToolButton icon="signature" label={t.placeSignature} disabled={ws.pages.length === 0} onClick={onPlaceSignature} />
           <ToolButton icon="undo" label={t.undo} disabled={!ws.canUndo} onClick={() => ws.dispatch({ type: 'undo' })} />
           <ToolButton icon="redo" label={t.redo} disabled={!ws.canRedo} onClick={() => ws.dispatch({ type: 'redo' })} />
@@ -154,6 +156,7 @@ export function Toolbar({ ws, onPlaceSignature }: { ws: Workspace; onPlaceSignat
               {t.downloadSelected(selectedIds.length)}
             </button>
           )}
+          <SaveToDriveButton ws={ws} fileName={outputName} editable={editable} disabled={exportBlocked} />
           <button
             type="button"
             className="button button--primary"

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useI18n } from '../i18n';
 import { Icon } from './Icon';
 
@@ -76,7 +76,7 @@ export function useFileDrop(onFiles: (files: File[]) => void): boolean {
   return dragging;
 }
 
-export function EmptyState({ onFiles }: { onFiles: (files: File[]) => void }) {
+export function EmptyState({ onFiles, children }: { onFiles: (files: File[]) => void; children?: ReactNode }) {
   const { t } = useI18n();
   return (
     <section className="empty-state">
@@ -85,7 +85,10 @@ export function EmptyState({ onFiles }: { onFiles: (files: File[]) => void }) {
       </span>
       <h2>{t.dropTitle}</h2>
       <p>{t.dropHint}</p>
-      <AddFilesButton onFiles={onFiles} primary />
+      <div className="empty-state__actions">
+        <AddFilesButton onFiles={onFiles} primary />
+        {children}
+      </div>
       <p className="empty-state__privacy">{t.privacyNote}</p>
     </section>
   );

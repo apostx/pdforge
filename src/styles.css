@@ -1395,6 +1395,34 @@ select {
   width: min(420px, calc(100vw - 32px));
 }
 
+.notice.notice--info {
+  border-left-color: var(--accent);
+}
+
+.empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.drive-save {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.radio input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
 .notice {
   display: flex;
   align-items: flex-start;

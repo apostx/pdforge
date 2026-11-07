@@ -6,6 +6,7 @@ import { claimSession, clearSession, describe, imageFileKey, loadSession, saveSe
 import type { Action } from './state';
 import type { Compression, ImagePageSize, Overlay, PageItem, Source } from './types';
 import type { OpenedPdf } from './useWorkspace';
+import type { DriveRef } from '../drive/config';
 
 /**
  * Whether the workspace is kept for after a reload:
@@ -25,6 +26,13 @@ const SETTING = 'pdforge.keepWork';
  */
 const SAVE_DELAY = 500;
 
+/** A Drive file reference read back from storage, or nothing if it doesn't look like one. */
+function driveRef(value: unknown): DriveRef | undefined {
+  const ref = value as Partial<DriveRef> | null | undefined;
+  if (!ref || typeof ref.id !== 'string' || typeof ref.name !== 'string') return undefined;
+  return { id: ref.id, name: ref.name, ...(typeof ref.folder === 'string' ? { folder: ref.folder } : {}) };
+}
+
 async function rebuild(session: Session, openPdf: OpenedPdf, dispatch: Dispatch<Action>) {
   const { state, files } = session;
   const sources: Source[] = [];
@@ -34,14 +42,16 @@ async function rebuild(session: Session, openPdf: OpenedPdf, dispatch: Dispatch<
     const blob = files.get(sourceFileKey(stored.id));
     if (!blob) continue;
     try {
+      const drive = driveRef(stored.drive);
       if (stored.kind === 'pdf') {
-        const source = await openPdf(new Uint8Array(await blob.arrayBuffer()), stored.name, stored.id);
+        const opened = await openPdf(new Uint8Array(await blob.arrayBuffer()), stored.name, stored.id);
+        const source = drive ? { ...opened, drive } : opened;
         sources.push(source);
         pageCounts.set(source.id, source.boxes.length);
       } else {
         const { format, width, height, turn, components } = stored;
         const image: SourceImage = { blob, format, width, height, turn, components };
-        sources.push({ kind: 'image', id: stored.id, name: stored.name, image });
+        sources.push({ kind: 'image', id: stored.id, name: stored.name, image, ...(drive ? { drive } : {}) });
         pageCounts.set(stored.id, 1);
         imageSources.set(stored.id, image);
       }
@@ -85,6 +95,8 @@ export function useSession(
   compression: Compression,
   dispatch: Dispatch<Action>,
   openPdf: OpenedPdf,
+  driveTarget: DriveRef | null,
+  setDriveTarget: (target: DriveRef | null) => void,
 ) {
   const [keepWork, setKeepWorkState] = useState(() => readSetting(SETTING) !== '0');
   const [status, setStatus] = useState<SessionStatus>('restoring');
@@ -107,6 +119,7 @@ export function useSession(
         const session = await loadSession();
         if (session && !cancelled) {
           await rebuild(session, openPdf, dispatch);
+          setDriveTarget(driveRef(session.state.driveTarget) ?? null);
           // already in storage: the next save needn't write them again
           for (const key of session.files.keys()) stored.current.add(key);
         }
@@ -125,16 +138,16 @@ export function useSession(
   }, []);
 
   // saves run one after another, each with the latest state
-  const latest = useRef({ doc, imagePageSize, compression });
-  latest.current = { doc, imagePageSize, compression };
+  const latest = useRef({ doc, imagePageSize, compression, driveTarget });
+  latest.current = { doc, imagePageSize, compression, driveTarget };
   const queue = useRef(Promise.resolve());
   const pending = useRef<number | null>(null);
 
   const save = useCallback(() => {
     pending.current = null;
     queue.current = queue.current.then(async () => {
-      const { doc: current, imagePageSize: size, compression: level } = latest.current;
-      const { state, files } = describe(current.sources, current.pages, size, level);
+      const { doc: current, imagePageSize: size, compression: level, driveTarget: target } = latest.current;
+      const { state, files } = describe(current.sources, current.pages, size, level, target);
       setStatus('saving');
       try {
         await saveSession(state, files, stored.current);
@@ -153,7 +166,7 @@ export function useSession(
   useEffect(() => {
     if (!active || !restored.current || pending.current !== null) return;
     pending.current = window.setTimeout(save, SAVE_DELAY);
-  }, [doc, imagePageSize, compression, active, save]);
+  }, [doc, imagePageSize, compression, driveTarget, active, save]);
   useEffect(
     () => () => {
       if (pending.current !== null) window.clearTimeout(pending.current);

@@ -33,9 +33,15 @@ PDF tools that run entirely in the browser, hosted on GitHub Pages. Files never 
   [src/pdf/editable.ts](src/pdf/editable.ts)
 - Compression on export (200 / 150 / 100 dpi) for added photos and for the pictures inside
   existing PDFs (scans), done in a Web Worker
+- Google Drive (in builds set up for it): add PDFs and pictures from Drive with Google's picker,
+  and save the result back, over the file it came from or as a new file next to it; saved
+  editable, the edits come back when the file is opened from Drive again. Only the `drive.file`
+  scope: PDForge reaches just the files picked or saved with it. The sign-in token stays in memory
 - Installable app (PWA): works offline, and once installed opens PDFs and pictures from the
   file manager
-- Strict Content Security Policy in builds, so no outside code can reach stored signatures
+- Strict Content Security Policy in builds, so no outside code can reach stored signatures. With
+  Google Drive set up, the policy also lets in Google's sign-in, picker and Drive API (they load
+  only once Drive is used); without it the policy stays as strict as ever
 - Built for modest hardware: photos are kept as file references rather than in memory,
   thumbnails are decoded small, and documents made only of JPEG photos are written straight
   from the files (no copying), so hundreds of megabytes of pictures stay workable
@@ -73,6 +79,21 @@ subsetting garbles many fonts as it ships (glyphs go missing or swap); the fix i
 `@expo-google-fonts/*` package, add it to the catalog and run `npm run check:fonts` and the
 end-to-end tests. Only the default fonts are stored for offline use up front
 (`PRECACHED_FONTS` in [vite.config.ts](vite.config.ts)); the others are kept after first use.
+
+### Google Drive
+
+Drive is switched on by a Google Cloud OAuth client, given at build time (see
+[ROADMAP.md](ROADMAP.md) for the Google Cloud setup):
+
+```sh
+# .env.production (none of these are secrets: they end up in the page anyway)
+VITE_GOOGLE_CLIENT_ID=…apps.googleusercontent.com
+VITE_GOOGLE_API_KEY=…
+VITE_GOOGLE_APP_ID=…   # the project number
+```
+
+The end-to-end tests build with made-up values and stand in for Google's services
+([tests/e2e/drive.spec.ts](tests/e2e/drive.spec.ts)); signing in for real is checked by hand.
 
 ## Deployment
 

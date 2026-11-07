@@ -1,3 +1,4 @@
+import type { DriveRef } from '../drive/config';
 import type { PreparedImage } from '../pdf/images';
 import { storeOverlays, type StoredImageInfo, type StoredOverlay } from './serialize';
 import type { Compression, ImagePageSize, PageItem, Rotation, Source } from './types';
@@ -12,9 +13,10 @@ const FILES = 'files';
 const META = 'meta';
 const STATE_KEY = 'state';
 
-export type StoredSource =
+export type StoredSource = (
   | { kind: 'pdf'; id: string; name: string }
-  | { kind: 'image'; id: string; name: string; format: 'jpg' | 'png'; width: number; height: number; turn: Rotation; components: number };
+  | { kind: 'image'; id: string; name: string; format: 'jpg' | 'png'; width: number; height: number; turn: Rotation; components: number }
+) & { drive?: DriveRef };
 
 export interface StoredPage {
   id: string;
@@ -32,6 +34,8 @@ export interface SessionState {
   images: Record<string, StoredImageInfo>;
   imagePageSize: ImagePageSize;
   compression: Compression;
+  /** The Drive file the work was opened from or last saved to. */
+  driveTarget?: DriveRef | null;
 }
 
 export interface Session {
@@ -96,6 +100,7 @@ export function describe(
   pages: PageItem[],
   imagePageSize: ImagePageSize,
   compression: Compression,
+  driveTarget: DriveRef | null = null,
 ): { state: SessionState; files: Map<string, () => Blob> } {
   const images = new Map<string, PreparedImage>();
   const storedPages = pages.map((page) => ({ ...page, overlays: storeOverlays(page.overlays, images) }));
@@ -103,11 +108,11 @@ export function describe(
   const storedSources = sources.map((source): StoredSource => {
     if (source.kind === 'pdf') {
       files.set(sourceFileKey(source.id), () => new Blob([source.bytes as BlobPart], { type: 'application/pdf' }));
-      return { kind: 'pdf', id: source.id, name: source.name };
+      return { kind: 'pdf', id: source.id, name: source.name, ...(source.drive ? { drive: source.drive } : {}) };
     }
     const { blob, format, width, height, turn, components } = source.image;
     files.set(sourceFileKey(source.id), () => blob);
-    return { kind: 'image', id: source.id, name: source.name, format, width, height, turn, components };
+    return { kind: 'image', id: source.id, name: source.name, format, width, height, turn, components, ...(source.drive ? { drive: source.drive } : {}) };
   });
   const imageInfo: Record<string, StoredImageInfo> = {};
   for (const [key, image] of images) {
@@ -115,7 +120,7 @@ export function describe(
     files.set(imageFileKey(key), () => new Blob([image.bytes as BlobPart]));
   }
   return {
-    state: { version: 1, savedAt: Date.now(), sources: storedSources, pages: storedPages, images: imageInfo, imagePageSize, compression },
+    state: { version: 1, savedAt: Date.now(), sources: storedSources, pages: storedPages, images: imageInfo, imagePageSize, compression, driveTarget },
     files,
   };
 }

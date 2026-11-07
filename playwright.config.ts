@@ -18,6 +18,12 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: 'npm run build && npx vite preview --port 4173 --strictPort',
+    // Google Drive on, with made-up values: the tests stand in for Google (see drive.spec.ts)
+    env: {
+      VITE_GOOGLE_CLIENT_ID: 'test-client.apps.googleusercontent.com',
+      VITE_GOOGLE_API_KEY: 'test-api-key',
+      VITE_GOOGLE_APP_ID: '123456789',
+    },
     url: 'http://localhost:4173/',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

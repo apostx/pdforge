@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useI18n } from './i18n';
+import { OpenFromDriveButton } from './drive/DriveControls';
 import { EmptyState, useFileDrop } from './ui/files';
 import { Header } from './ui/Header';
 import { Icon } from './ui/Icon';
@@ -76,7 +77,9 @@ export function App() {
             {t.restoring}
           </p>
         ) : empty ? (
-          <EmptyState onFiles={ws.addFiles} />
+          <EmptyState onFiles={ws.addFiles}>
+            <OpenFromDriveButton ws={ws} />
+          </EmptyState>
         ) : (
           <>
             <Toolbar ws={ws} onPlaceSignature={() => setDialog('place')} />

@@ -1,4 +1,5 @@
 import type { PDFDocument } from 'pdf-lib';
+import type { DriveRef } from '../drive/config';
 import type { FontFamily, TextAlign } from '../pdf/fonts';
 import type { PreparedImage, SourceImage } from '../pdf/images';
 
@@ -11,10 +12,10 @@ export interface PageBox {
   rotation: Rotation;
 }
 
-/** A file the user added. Pages point back to their source. */
+/** A file the user added. Pages point back to their source. `drive`: where in Google Drive it came from. */
 export type Source =
-  | { kind: 'pdf'; id: string; name: string; bytes: Uint8Array; doc: PDFDocument; boxes: PageBox[] }
-  | { kind: 'image'; id: string; name: string; image: SourceImage };
+  | { kind: 'pdf'; id: string; name: string; bytes: Uint8Array; doc: PDFDocument; boxes: PageBox[]; drive?: DriveRef }
+  | { kind: 'image'; id: string; name: string; image: SourceImage; drive?: DriveRef };
 
 /**
  * Something placed on top of a page. Positions live in the page's own, unrotated space so
@@ -81,11 +82,14 @@ export type ImagePageSize = 'a4' | 'fit';
 export type Compression = 'none' | 'high' | 'medium' | 'small';
 
 /** editsChanged: a PDF exported editable was changed by another program, so it opens as a plain PDF. */
-export type ErrorKind = 'encrypted' | 'unsupported' | 'unreadable' | 'export' | 'editsChanged';
+export type ErrorKind = 'encrypted' | 'unsupported' | 'unreadable' | 'export' | 'editsChanged' | 'driveOpen' | 'driveSave' | 'driveSaved';
 
+/** A notice for the person: mostly errors; `driveSaved` is good news. */
 export interface AppError {
   id: string;
   kind: ErrorKind;
-  /** The file that failed to load; empty for export errors. */
+  /** The file it is about; empty for export errors. */
   fileName: string;
+  /** Somewhere to go from the notice (the file saved in Drive). */
+  link?: string;
 }

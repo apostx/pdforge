@@ -7,6 +7,8 @@ import type { Thumb } from '../pdf/thumbs';
 import { addRotation } from './geometry';
 import { initialState, reachable, reducer } from './state';
 import type { AppError, ErrorKind, PageItem, Source } from './types';
+import type { DriveRef } from '../drive/config';
+import { downloadFile, driveFileUrl, DriveCancelled, pickFiles, uploadPdf } from '../drive/google';
 import { useSession } from './useSession';
 
 export type { Action as WorkspaceAction } from './state';
@@ -48,6 +50,10 @@ const openPdf: OpenedPdf = async (bytes, name, id) => {
   });
   return { kind: 'pdf', id, name, bytes, doc: pdf, boxes };
 };
+
+function pdfName(fileName: string): string {
+  return fileName.toLowerCase().endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+}
 
 function baseName(fileName: string): string {
   return fileName.replace(/\.[^.]+$/, '') || 'document';
@@ -134,13 +140,16 @@ export function useWorkspace() {
     }
   }, [doc, thumbs]);
 
-  const reportError = useCallback((kind: ErrorKind, fileName: string) => {
-    setErrors((current) => [...current, { id: crypto.randomUUID(), kind, fileName }]);
+  const reportError = useCallback((kind: ErrorKind, fileName: string, link?: string) => {
+    setErrors((current) => [...current, { id: crypto.randomUUID(), kind, fileName, link }]);
   }, []);
 
-  const session = useSession(doc, state.imagePageSize, state.compression, dispatch, openPdf);
+  // The Drive file the work was opened from or last saved to, which "save to Drive" can save over.
+  const [driveTarget, setDriveTarget] = useState<DriveRef | null>(null);
 
-  const loadFile = useCallback(async (file: File) => {
+  const session = useSession(doc, state.imagePageSize, state.compression, dispatch, openPdf, driveTarget, setDriveTarget);
+
+  const loadFile = useCallback(async (file: File, drive?: DriveRef) => {
     const sourceId = crypto.randomUUID();
 
     if (await isPdf(file)) {
@@ -158,6 +167,7 @@ export function useWorkspace() {
       }
       if (edits === 'changed') reportError('editsChanged', file.name);
       if (edits && edits !== 'changed') source = await openPdf(await source.doc.save(), file.name, sourceId);
+      if (drive) source = { ...source, drive };
       const pages: PageItem[] = source.boxes.map((_, pageIndex) => ({
         id: crypto.randomUUID(),
         sourceId,
@@ -175,7 +185,7 @@ export function useWorkspace() {
       const thumb = await sourceThumb(image);
       const page: PageItem = { id: crypto.randomUUID(), sourceId, pageIndex: 0, rotation: 0, overlays: [] };
       dispatch({ type: 'thumb', id: page.id, thumb });
-      dispatch({ type: 'add', source: { kind: 'image', id: sourceId, name: file.name, image }, pages: [page] });
+      dispatch({ type: 'add', source: { kind: 'image', id: sourceId, name: file.name, image, ...(drive ? { drive } : {}) }, pages: [page] });
     } catch (error) {
       throw new LoadFailure(error instanceof UnsupportedImageError ? 'unsupported' : 'unreadable');
     }
@@ -199,13 +209,19 @@ export function useWorkspace() {
     [loadFile, reportError],
   );
 
+  const makePdf = useCallback(
+    async (pages: PageItem[], editable: boolean) => {
+      const { exportPdf } = await import('../pdf/exportPdf');
+      return exportPdf(pages, doc.sources, state.imagePageSize, state.compression, setProgress, editable);
+    },
+    [doc.sources, state.imagePageSize, state.compression],
+  );
+
   const download = useCallback(
     async (pages: PageItem[], fileName: string, editable: boolean) => {
       setExporting(true);
       try {
-        const { exportPdf } = await import('../pdf/exportPdf');
-        const pdf = await exportPdf(pages, doc.sources, state.imagePageSize, state.compression, setProgress, editable);
-        downloadBlob(pdf, fileName.toLowerCase().endsWith('.pdf') ? fileName : `${fileName}.pdf`);
+        downloadBlob(await makePdf(pages, editable), pdfName(fileName));
       } catch (error) {
         console.error('Export failed', error);
         reportError('export', '');
@@ -214,7 +230,65 @@ export function useWorkspace() {
         setProgress(null);
       }
     },
-    [doc.sources, state.imagePageSize, state.compression, reportError],
+    [makePdf, reportError],
+  );
+
+  /** Adds files chosen in Google Drive's picker. */
+  const openFromDrive = useCallback(
+    async (locale: string) => {
+      let picked;
+      try {
+        picked = await pickFiles(locale);
+      } catch (error) {
+        if (!(error instanceof DriveCancelled)) {
+          console.error('Could not open Google Drive', error);
+          reportError('driveOpen', '');
+        }
+        return;
+      }
+      if (!picked || picked.length === 0) return;
+      // a single PDF opened into an empty workspace is the file "save to Drive" saves over
+      if (latest.current.doc.pages.length === 0 && picked.length === 1 && picked[0].mimeType === 'application/pdf') {
+        setDriveTarget({ id: picked[0].id, name: picked[0].name, folder: picked[0].folder });
+      }
+      setLoadingCount((count) => count + picked.length);
+      for (const file of picked) {
+        try {
+          await loadFile(await downloadFile(file), { id: file.id, name: file.name, folder: file.folder });
+        } catch (error) {
+          console.error(`Could not open ${file.name} from Google Drive`, error);
+          reportError(error instanceof LoadFailure ? error.kind : 'driveOpen', file.name);
+        } finally {
+          setLoadingCount((count) => count - 1);
+        }
+      }
+    },
+    [loadFile, reportError],
+  );
+
+  /** Saves the PDF to Google Drive: over `replace`, or as a new file. */
+  const saveToDrive = useCallback(
+    async (pages: PageItem[], fileName: string, editable: boolean, replace: DriveRef | null) => {
+      setExporting(true);
+      try {
+        const pdf = await makePdf(pages, editable);
+        // a new file goes next to the one the work came from, if it came from Drive
+        const folder = driveTarget?.folder ?? doc.sources.find((source) => source.drive?.folder)?.drive?.folder;
+        const saved = await uploadPdf(pdf, pdfName(fileName), replace, folder);
+        setDriveTarget(saved);
+        reportError('driveSaved', saved.name, driveFileUrl(saved));
+        return true;
+      } catch (error) {
+        if (error instanceof DriveCancelled) return false;
+        console.error('Could not save to Google Drive', error);
+        reportError('driveSave', '');
+        return false;
+      } finally {
+        setExporting(false);
+        setProgress(null);
+      }
+    },
+    [makePdf, driveTarget, doc.sources, reportError],
   );
 
   const dismissError = useCallback((id: string) => {
@@ -240,6 +314,9 @@ export function useWorkspace() {
     sessionStatus: session.sessionStatus,
     addFiles,
     download,
+    driveTarget,
+    openFromDrive,
+    saveToDrive,
     reportError,
     dismissError,
     dispatch,

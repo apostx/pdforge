@@ -1,15 +1,30 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 /**
- * A strict Content Security Policy for the built app (the dev server needs inline scripts).
- * Signatures live in this origin's storage, so no outside code may ever run here: scripts
- * only from our own files, plus a hash for the small inline theme script.
+ * Google's hosts, allowed only in builds with Google Drive set up (VITE_GOOGLE_* in .env files):
+ * the sign-in (Google Identity Services) and the file picker are scripts and frames Google serves,
+ * and Drive's API is called from the page. They load only once someone uses Drive.
  */
-function contentSecurityPolicy(): Plugin {
+const GOOGLE = {
+  script: ['https://accounts.google.com', 'https://apis.google.com'],
+  frame: ['https://accounts.google.com', 'https://docs.google.com', 'https://drive.google.com'],
+  connect: ['https://accounts.google.com', 'https://www.googleapis.com', 'https://content.googleapis.com'],
+  // the picker's dialog in this page is styled by Google's own style sheets and inline styles
+  style: ['https://accounts.google.com', 'https://apis.google.com', 'https://ssl.gstatic.com', "'unsafe-inline'"],
+  img: ['https://ssl.gstatic.com', 'https://www.gstatic.com', 'https://lh3.googleusercontent.com'],
+};
+
+/**
+ * A strict Content Security Policy for the built app (the dev server needs inline scripts).
+ * Signatures live in this origin's storage, so no outside code may run here: scripts only from
+ * our own files, plus a hash for the small inline theme script; with Google Drive set up, also
+ * Google's (see GOOGLE above).
+ */
+function contentSecurityPolicy(google: boolean): Plugin {
   return {
     name: 'pdforge-csp',
     apply: 'build',
@@ -19,15 +34,17 @@ function contentSecurityPolicy(): Plugin {
         const inlineHashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
           ([, code]) => `'sha256-${createHash('sha256').update(code).digest('base64')}'`,
         );
+        const extra = (kind: keyof typeof GOOGLE) => (google ? ` ${GOOGLE[kind].join(' ')}` : '');
         const policy = [
           "default-src 'self'",
           // wasm: pdf.js decodes some image formats with WebAssembly
-          `script-src 'self' 'wasm-unsafe-eval' ${inlineHashes.join(' ')}`,
+          `script-src 'self' 'wasm-unsafe-eval' ${inlineHashes.join(' ')}${extra('script')}`,
           // React sets style props through the CSSOM, which CSP doesn't restrict
-          "style-src 'self'",
-          "img-src 'self' blob: data:",
+          `style-src 'self'${extra('style')}`,
+          `img-src 'self' blob: data:${extra('img')}`,
           "font-src 'self' blob: data:",
-          "connect-src 'self' blob: data:",
+          `connect-src 'self' blob: data:${extra('connect')}`,
+          ...(google ? [`frame-src${extra('frame')}`] : []),
           "worker-src 'self' blob:",
           "object-src 'none'",
           "base-uri 'self'",
@@ -96,10 +113,14 @@ function serviceWorker(): Plugin {
   };
 }
 
-export default defineConfig({
-  // relative base so the build works under https://<user>.github.io/<repo>/
-  base: './',
-  plugins: [react(), contentSecurityPolicy(), serviceWorker()],
-  // fontkit and pdf.js are large chunks, but they only load when needed
-  build: { chunkSizeWarningLimit: 1000 },
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, import.meta.dirname, 'VITE_GOOGLE_');
+  const google = Boolean(env.VITE_GOOGLE_CLIENT_ID && env.VITE_GOOGLE_API_KEY && env.VITE_GOOGLE_APP_ID);
+  return {
+    // relative base so the build works under https://<user>.github.io/<repo>/
+    base: './',
+    plugins: [react(), contentSecurityPolicy(google), serviceWorker()],
+    // fontkit and pdf.js are large chunks, but they only load when needed
+    build: { chunkSizeWarningLimit: 1000 },
+  };
 });

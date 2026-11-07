@@ -17,14 +17,30 @@ export function Notices({ errors, onDismiss }: { errors: AppError[]; onDismiss: 
         return t.errorExport;
       case 'editsChanged':
         return t.errorEditsChanged(error.fileName);
+      case 'driveOpen':
+        return error.fileName ? t.errorDriveFile(error.fileName) : t.errorDriveOpen;
+      case 'driveSave':
+        return t.errorDriveSave;
+      case 'driveSaved':
+        return t.driveSaved(error.fileName);
     }
   };
 
   return (
     <div className="notices" role="status" aria-live="polite">
       {errors.map((error) => (
-        <div key={error.id} className="notice">
-          <span>{message(error)}</span>
+        <div key={error.id} className={error.kind === 'driveSaved' ? 'notice notice--info' : 'notice'}>
+          <span>
+            {message(error)}
+            {error.link && (
+              <>
+                {' '}
+                <a href={error.link} target="_blank" rel="noopener noreferrer">
+                  {t.openInDrive}
+                </a>
+              </>
+            )}
+          </span>
           <button type="button" className="icon-button" onClick={() => onDismiss(error.id)} title={t.dismiss} aria-label={t.dismiss}>
             <Icon name="close" size={16} />
           </button>
