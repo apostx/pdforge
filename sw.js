@@ -1,9 +1,10 @@
 // Offline support. Built into dist/sw.js by the pwa plugin in vite.config.ts, which fills in
 // the version and the list of files to keep. This file is not part of the app bundle.
 
-const VERSION = "1794017263517-84c596ecc8f3";
+const VERSION = "1794171601709-9bfdef7a1693";
 const PRECACHE = [
   "./",
+  "./CNAME",
   "./apple-touch-icon.png",
   "./assets/Caveat_400Regular-BmQ10ZMN.ttf",
   "./assets/DancingScript_400Regular-BfvM1EuJ.ttf",
