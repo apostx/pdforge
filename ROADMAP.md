@@ -34,9 +34,10 @@ Drive set up only, and load only once Drive is used.
    It can stay in *Testing* with your own account as a test user while trying it; publishing
    it later needs no security review for this scope.
 3. **Credentials → OAuth client ID**, type *Web application*, authorised JavaScript origins:
-   `https://apostx.github.io`, `http://localhost:5173`, `http://localhost:4173`.
+   `https://pdforge.sallai.cc` (the site's own domain), `https://apostx.github.io`,
+   `http://localhost:5173`, `http://localhost:4173`.
 4. **Credentials → API key**, restricted to the Picker API and to the referrers
-   `https://apostx.github.io/pdforge/*` and `http://localhost:*/*`.
+   `https://pdforge.sallai.cc/*`, `https://apostx.github.io/pdforge/*` and `http://localhost:*/*`.
 5. Hand over the client ID, the API key and the project number. None of them are secrets: they
    end up in the page's code anyway, and the restrictions above are what protect them. They go
    into `.env.production` (see the README).

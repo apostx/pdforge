@@ -6,6 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
+/** Files in gh-pages that aren't built but must stay (see below). */
+const KEEP = ['CNAME'];
+
 const root = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const dist = join(root, 'dist');
 const git = (args, cwd = root) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim();
@@ -30,8 +33,11 @@ try {
     git(['remote', 'add', 'origin', remote], work);
   }
 
+  // CNAME holds the custom domain set in the repository's Pages settings; GitHub keeps it in
+  // this branch, and deleting it drops the domain (the site there then answers 404). It is
+  // kept even when the build brings none; public/CNAME, when there is one, replaces it.
   for (const entry of readdirSync(work)) {
-    if (entry !== '.git') rmSync(join(work, entry), { recursive: true, force: true });
+    if (entry !== '.git' && !KEEP.includes(entry)) rmSync(join(work, entry), { recursive: true, force: true });
   }
   cpSync(dist, work, { recursive: true });
   // without this, Pages runs the site through Jekyll, which drops files starting with "_"

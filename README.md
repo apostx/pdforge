@@ -104,6 +104,10 @@ The site is built locally and published to the `gh-pages` branch, which GitHub P
 npm run deploy     # build, then commit dist/ to gh-pages and push it
 ```
 
+The site's own domain, `pdforge.sallai.cc`, is set in [public/CNAME](public/CNAME), which every
+build carries to gh-pages; the deploy also never removes a CNAME already there (without it,
+GitHub Pages drops the domain and the site there answers 404).
+
 [.github/workflows/deploy.yml](.github/workflows/deploy.yml) can build and deploy with GitHub Actions
 instead; it is currently only started by hand (see the comment in the file for switching back).
 

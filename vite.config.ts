@@ -96,7 +96,7 @@ function serviceWorker(): Plugin {
       // (only needed for Chinese, Japanese and Korean text) are many, so they're cached on first use
       const publicFiles = listFiles(publicDir)
         .map((path) => relative(publicDir, path).replaceAll('\\', '/'))
-        .filter((path) => !path.startsWith('pdfjs/cmaps/'));
+        .filter((path) => !path.startsWith('pdfjs/cmaps/') && path !== 'CNAME');
       // index.html is added to the bundle after this hook runs, so it's listed by hand
       const names = new Set([...precached, ...publicFiles, 'index.html']);
       const files = ['./', ...[...names].sort().map((path) => `./${path}`)];
